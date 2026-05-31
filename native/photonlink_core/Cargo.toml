@@ -1,0 +1,13 @@
+[package]
+name = "photonlink_core"
+version = "0.1.0"
+edition = "2021"
+description = "PhotonLink Rust core engine — optical transfer protocols"
+license = "MIT"
+
+[lib]
+name = "photonlink_core"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Phase 2: add encoding, crypto, and serialization crates here
