@@ -38,3 +38,69 @@ final class DataPacket extends TransferPacket {
   final int totalChunks;
   final Uint8List payload;
 }
+
+/// Receiver confirms successfully received packet IDs.
+final class AckPacket extends TransferPacket {
+  const AckPacket({
+    required super.sessionId,
+    required this.packetIds,
+    required this.timestamp,
+  });
+
+  final List<int> packetIds;
+  final DateTime timestamp;
+}
+
+/// Receiver requests retransmission of missing packet IDs.
+final class NakPacket extends TransferPacket {
+  const NakPacket({
+    required super.sessionId,
+    required this.missingPacketIds,
+    required this.timestamp,
+  });
+
+  final List<int> missingPacketIds;
+  final DateTime timestamp;
+}
+
+/// Receiver readiness and resume state (already-received IDs).
+final class HandshakePacket extends TransferPacket {
+  const HandshakePacket({
+    required super.sessionId,
+    required this.receivedChunkIds,
+    required this.timestamp,
+  });
+
+  final List<int> receivedChunkIds;
+  final DateTime timestamp;
+}
+
+/// Control signals for round handoff and lifecycle.
+enum ControlType {
+  ready,
+  endOfRound,
+  complete,
+  pause,
+  cancel,
+  resumeRequest,
+}
+
+/// Session control / round boundary packet.
+final class ControlPacket extends TransferPacket {
+  const ControlPacket({
+    required super.sessionId,
+    required this.type,
+    required this.timestamp,
+  });
+
+  final ControlType type;
+  final DateTime timestamp;
+}
+
+/// Returns chunk ID for data packets, or -1 for non-data packets.
+int packetIdOf(TransferPacket packet) {
+  return switch (packet) {
+    DataPacket data => data.chunkId,
+    _ => -1,
+  };
+}

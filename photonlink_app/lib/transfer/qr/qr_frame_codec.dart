@@ -7,6 +7,7 @@ import '../../protocols/interfaces/transfer_packet.dart';
 import '../core/transfer_limits.dart';
 
 /// QR wire format: PL2|<type>|<sessionId>|<seq>|<total>|<base64Payload>
+/// Types: M metadata, D data, A ack, N nak, H handshake, C control
 class QrFrameCodec implements TransferEncoder, TransferDecoder {
   const QrFrameCodec();
 
@@ -38,6 +39,34 @@ class QrFrameCodec implements TransferEncoder, TransferDecoder {
       case DataPacket data:
         final b64 = base64Encode(data.payload);
         return '$magic|D|${data.sessionId}|${data.chunkId}|${data.totalChunks}|$b64';
+      case AckPacket ack:
+        final jsonPayload = jsonEncode({
+          'packetIds': ack.packetIds,
+          'timestamp': ack.timestamp.toIso8601String(),
+        });
+        final b64 = base64Encode(utf8.encode(jsonPayload));
+        return '$magic|A|${ack.sessionId}|0|${ack.packetIds.length}|$b64';
+      case NakPacket nak:
+        final jsonPayload = jsonEncode({
+          'missingPacketIds': nak.missingPacketIds,
+          'timestamp': nak.timestamp.toIso8601String(),
+        });
+        final b64 = base64Encode(utf8.encode(jsonPayload));
+        return '$magic|N|${nak.sessionId}|0|${nak.missingPacketIds.length}|$b64';
+      case HandshakePacket handshake:
+        final jsonPayload = jsonEncode({
+          'receivedChunkIds': handshake.receivedChunkIds,
+          'timestamp': handshake.timestamp.toIso8601String(),
+        });
+        final b64 = base64Encode(utf8.encode(jsonPayload));
+        return '$magic|H|${handshake.sessionId}|0|${handshake.receivedChunkIds.length}|$b64';
+      case ControlPacket control:
+        final jsonPayload = jsonEncode({
+          'type': control.type.name,
+          'timestamp': control.timestamp.toIso8601String(),
+        });
+        final b64 = base64Encode(utf8.encode(jsonPayload));
+        return '$magic|C|${control.sessionId}|0|1|$b64';
     }
   }
 
@@ -57,41 +86,99 @@ class QrFrameCodec implements TransferEncoder, TransferDecoder {
     final seq = int.tryParse(parts[3]);
     final total = int.tryParse(parts[4]);
     if (seq == null || total == null) return null;
-    if (total < 1 || total > TransferLimits.maxTotalChunks) return null;
 
     try {
       final payloadBytes = base64Decode(parts[5]);
-      if (type == 'M') {
-        final jsonMap =
-            jsonDecode(utf8.decode(payloadBytes)) as Map<String, dynamic>;
-        final fileName = jsonMap['fileName'] as String? ?? '';
-        final fileSize = jsonMap['fileSize'] as int? ?? -1;
-        final totalChunks = jsonMap['totalChunks'] as int? ?? 0;
-        final sha256 = jsonMap['sha256'] as String? ?? '';
-        TransferLimits.validateMetadata(
-          fileName: fileName,
-          fileSize: fileSize,
-          totalChunks: totalChunks,
-          sha256: sha256,
-        );
-        return MetadataPacket(
-          sessionId: sessionId,
-          fileName: fileName,
-          fileSize: fileSize,
-          totalChunks: totalChunks,
-          sha256: sha256,
-          mimeType:
-              jsonMap['mimeType'] as String? ?? 'application/octet-stream',
-        );
-      } else if (type == 'D') {
-        if (seq < 0 || seq >= total) return null;
-        if (payloadBytes.length > TransferLimits.maxFileBytes) return null;
-        return DataPacket(
-          sessionId: sessionId,
-          chunkId: seq,
-          totalChunks: total,
-          payload: Uint8List.fromList(payloadBytes),
-        );
+
+      switch (type) {
+        case 'D':
+          if (total < 1 || total > TransferLimits.maxTotalChunks) return null;
+          if (seq < 0 || seq >= total) return null;
+          if (payloadBytes.length > TransferLimits.maxFileBytes) return null;
+          return DataPacket(
+            sessionId: sessionId,
+            chunkId: seq,
+            totalChunks: total,
+            payload: Uint8List.fromList(payloadBytes),
+          );
+        case 'M':
+          final jsonStr = utf8.decode(payloadBytes);
+          if (total < 1 || total > TransferLimits.maxTotalChunks) return null;
+          final jsonMap = jsonDecode(jsonStr) as Map<String, dynamic>;
+          final fileName = jsonMap['fileName'] as String? ?? '';
+          final fileSize = jsonMap['fileSize'] as int? ?? -1;
+          final totalChunks = jsonMap['totalChunks'] as int? ?? 0;
+          final sha256 = jsonMap['sha256'] as String? ?? '';
+          TransferLimits.validateMetadata(
+            fileName: fileName,
+            fileSize: fileSize,
+            totalChunks: totalChunks,
+            sha256: sha256,
+          );
+          return MetadataPacket(
+            sessionId: sessionId,
+            fileName: fileName,
+            fileSize: fileSize,
+            totalChunks: totalChunks,
+            sha256: sha256,
+            mimeType:
+                jsonMap['mimeType'] as String? ?? 'application/octet-stream',
+          );
+        case 'A':
+          final jsonStr = utf8.decode(payloadBytes);
+          final jsonMap = jsonDecode(jsonStr) as Map<String, dynamic>;
+          final ids = (jsonMap['packetIds'] as List<dynamic>)
+              .map((e) => e as int)
+              .toList();
+          return AckPacket(
+            sessionId: sessionId,
+            packetIds: ids,
+            timestamp: DateTime.parse(
+              jsonMap['timestamp'] as String? ?? DateTime.now().toIso8601String(),
+            ),
+          );
+        case 'N':
+          final jsonStrN = utf8.decode(payloadBytes);
+          final jsonMap = jsonDecode(jsonStrN) as Map<String, dynamic>;
+          final ids = (jsonMap['missingPacketIds'] as List<dynamic>)
+              .map((e) => e as int)
+              .toList();
+          if (ids.length > TransferLimits.maxTotalChunks) return null;
+          return NakPacket(
+            sessionId: sessionId,
+            missingPacketIds: ids,
+            timestamp: DateTime.parse(
+              jsonMap['timestamp'] as String? ?? DateTime.now().toIso8601String(),
+            ),
+          );
+        case 'H':
+          final jsonStrH = utf8.decode(payloadBytes);
+          final jsonMap = jsonDecode(jsonStrH) as Map<String, dynamic>;
+          final ids = (jsonMap['receivedChunkIds'] as List<dynamic>)
+              .map((e) => e as int)
+              .toList();
+          return HandshakePacket(
+            sessionId: sessionId,
+            receivedChunkIds: ids,
+            timestamp: DateTime.parse(
+              jsonMap['timestamp'] as String? ?? DateTime.now().toIso8601String(),
+            ),
+          );
+        case 'C':
+          final jsonStrC = utf8.decode(payloadBytes);
+          final jsonMap = jsonDecode(jsonStrC) as Map<String, dynamic>;
+          final typeName = jsonMap['type'] as String? ?? 'ready';
+          final controlType = ControlType.values.firstWhere(
+            (t) => t.name == typeName,
+            orElse: () => ControlType.ready,
+          );
+          return ControlPacket(
+            sessionId: sessionId,
+            type: controlType,
+            timestamp: DateTime.parse(
+              jsonMap['timestamp'] as String? ?? DateTime.now().toIso8601String(),
+            ),
+          );
       }
     } catch (_) {
       return null;

@@ -4,12 +4,12 @@ import '../../protocols/transfer_method.dart';
 import '../../services/storage/preferences_service.dart';
 import '../domain/transfer_record.dart';
 
-/// SharedPreferences-backed transfer history repository.
+/// SharedPreferences-backed transfer history repository (v2 schema).
 class PersistentHistoryRepository {
   PersistentHistoryRepository(this._prefs);
 
   final PreferencesService _prefs;
-  static const _storageKey = 'transfer_history_v1';
+  static const _storageKey = 'transfer_history_v2';
 
   Future<List<TransferRecord>> fetchAll() async {
     final raw = _prefs.getString(_storageKey);
@@ -33,8 +33,13 @@ class PersistentHistoryRepository {
     await _saveAll(records);
   }
 
-  /// Updates status of an existing record by id.
-  Future<bool> updateStatus(String id, TransferStatus status) async {
+  Future<bool> updateRecord(
+    String id, {
+    TransferStatus? status,
+    int? retryCount,
+    int? durationMs,
+    String? failureReason,
+  }) async {
     final records = await fetchAll();
     final index = records.indexWhere((r) => r.id == id);
     if (index < 0) return false;
@@ -44,13 +49,21 @@ class PersistentHistoryRepository {
       fileName: existing.fileName,
       method: existing.method,
       sizeBytes: existing.sizeBytes,
-      status: status,
+      status: status ?? existing.status,
       timestamp: existing.timestamp,
       direction: existing.direction,
+      sessionId: existing.sessionId,
+      durationMs: durationMs ?? existing.durationMs,
+      retryCount: retryCount ?? existing.retryCount,
+      failureReason: failureReason ?? existing.failureReason,
     );
     await _saveAll(records);
     return true;
   }
+
+  @Deprecated('Use updateRecord')
+  Future<bool> updateStatus(String id, TransferStatus status) =>
+      updateRecord(id, status: status);
 
   Future<void> clearAll() async {
     await _prefs.setString(_storageKey, '[]');
@@ -61,7 +74,6 @@ class PersistentHistoryRepository {
     await _prefs.setString(_storageKey, jsonEncode(json));
   }
 
-  /// Seeds demo records only on first launch (empty storage).
   Future<List<TransferRecord>> _defaultSeedIfEmpty() async {
     final seeded = _seededRecords;
     await _saveAll(seeded);
@@ -76,6 +88,10 @@ class PersistentHistoryRepository {
         'status': r.status.name,
         'timestamp': r.timestamp.toIso8601String(),
         'direction': r.direction.name,
+        if (r.sessionId != null) 'sessionId': r.sessionId,
+        'durationMs': r.durationMs,
+        'retryCount': r.retryCount,
+        if (r.failureReason != null) 'failureReason': r.failureReason,
       };
 
   static TransferRecord _recordFromJson(Map<String, dynamic> json) {
@@ -96,6 +112,10 @@ class PersistentHistoryRepository {
         (d) => d.name == json['direction'],
         orElse: () => TransferDirection.sent,
       ),
+      sessionId: json['sessionId'] as String?,
+      durationMs: json['durationMs'] as int? ?? 0,
+      retryCount: json['retryCount'] as int? ?? 0,
+      failureReason: json['failureReason'] as String?,
     );
   }
 
@@ -108,6 +128,7 @@ class PersistentHistoryRepository {
       status: TransferStatus.success,
       timestamp: DateTime.now().subtract(const Duration(days: 1)),
       direction: TransferDirection.received,
+      sessionId: 'seed-session',
     ),
   ];
 }

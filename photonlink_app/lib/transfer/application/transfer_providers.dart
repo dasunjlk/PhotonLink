@@ -4,8 +4,14 @@ import '../../services/storage/preferences_service.dart';
 import '../core/chunking_engine.dart';
 import '../core/integrity_verifier.dart';
 import '../core/session_factory.dart';
-import '../core/session_store.dart';
+import '../persistence/received_chunk_store.dart';
+import '../persistence/session_persistence_manager_impl.dart';
 import '../qr/qr_frame_codec.dart';
+import '../reliability/acknowledgement_manager_impl.dart';
+import '../reliability/diagnostics_collector_impl.dart';
+import '../reliability/missing_packet_tracker_impl.dart';
+import '../reliability/retry_manager_impl.dart';
+import '../reliability/transfer_recovery_manager_impl.dart';
 import 'receiver_controller.dart';
 import 'sender_controller.dart';
 import 'transfer_state.dart';
@@ -29,8 +35,33 @@ final qrFrameCodecProvider = Provider<QrFrameCodec>(
   (ref) => const QrFrameCodec(),
 );
 
-final sessionStoreProvider = Provider<SessionStore>((ref) {
-  return SessionStore(ref.watch(preferencesServiceProvider));
+final missingPacketTrackerProvider = Provider<MissingPacketTrackerImpl>(
+  (ref) => MissingPacketTrackerImpl(),
+);
+
+final acknowledgementManagerProvider = Provider<AcknowledgementManagerImpl>(
+  (ref) => AcknowledgementManagerImpl(),
+);
+
+final retryManagerProvider = Provider<RetryManagerImpl>(
+  (ref) => RetryManagerImpl(),
+);
+
+final diagnosticsCollectorProvider = Provider<DiagnosticsCollectorImpl>(
+  (ref) => DiagnosticsCollectorImpl(),
+);
+
+final transferRecoveryManagerProvider = Provider<TransferRecoveryManagerImpl>(
+  (ref) => TransferRecoveryManagerImpl(),
+);
+
+final receivedChunkStoreProvider = Provider<ReceivedChunkStore>(
+  (ref) => ReceivedChunkStore(),
+);
+
+final sessionPersistenceManagerProvider =
+    Provider<SessionPersistenceManagerImpl>((ref) {
+  return SessionPersistenceManagerImpl(ref.watch(preferencesServiceProvider));
 });
 
 final senderControllerProvider =

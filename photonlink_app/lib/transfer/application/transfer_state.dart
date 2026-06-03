@@ -1,17 +1,10 @@
 import '../../protocols/interfaces/transfer_session.dart';
+import '../reliability/models/transfer_diagnostics.dart';
+import '../state/transfer_phase.dart';
 
-/// High-level transfer phase for UI and controllers.
-enum TransferPhase {
-  idle,
-  preparing,
-  transmitting,
-  receiving,
-  reconstructing,
-  completed,
-  failed,
-}
+export '../state/transfer_phase.dart';
 
-/// Sender-side state.
+/// Sender-side state with Phase 3 diagnostics.
 class SenderTransferState {
   const SenderTransferState({
     this.phase = TransferPhase.idle,
@@ -24,6 +17,10 @@ class SenderTransferState {
     this.errorMessage,
     this.filePath,
     this.historyRecordId,
+    this.diagnostics = const TransferDiagnostics(),
+    this.missingCount = 0,
+    this.roundNumber = 0,
+    this.resumableSession,
   });
 
   final TransferPhase phase;
@@ -36,6 +33,10 @@ class SenderTransferState {
   final String? errorMessage;
   final String? filePath;
   final String? historyRecordId;
+  final TransferDiagnostics diagnostics;
+  final int missingCount;
+  final int roundNumber;
+  final String? resumableSession;
 
   SenderTransferState copyWith({
     TransferPhase? phase,
@@ -48,6 +49,10 @@ class SenderTransferState {
     String? errorMessage,
     String? filePath,
     String? historyRecordId,
+    TransferDiagnostics? diagnostics,
+    int? missingCount,
+    int? roundNumber,
+    String? resumableSession,
   }) {
     return SenderTransferState(
       phase: phase ?? this.phase,
@@ -60,11 +65,15 @@ class SenderTransferState {
       errorMessage: errorMessage ?? this.errorMessage,
       filePath: filePath ?? this.filePath,
       historyRecordId: historyRecordId ?? this.historyRecordId,
+      diagnostics: diagnostics ?? this.diagnostics,
+      missingCount: missingCount ?? this.missingCount,
+      roundNumber: roundNumber ?? this.roundNumber,
+      resumableSession: resumableSession ?? this.resumableSession,
     );
   }
 }
 
-/// Receiver-side state.
+/// Receiver-side state with Phase 3 diagnostics.
 class ReceiverTransferState {
   const ReceiverTransferState({
     this.phase = TransferPhase.idle,
@@ -76,6 +85,12 @@ class ReceiverTransferState {
     this.integrityValid,
     this.errorMessage,
     this.duplicatesIgnored = 0,
+    this.diagnostics = const TransferDiagnostics(),
+    this.missingCount = 0,
+    this.roundNumber = 0,
+    this.resumableSession,
+    this.statusMessage,
+    this.currentFrameData,
   });
 
   final TransferPhase phase;
@@ -87,6 +102,12 @@ class ReceiverTransferState {
   final bool? integrityValid;
   final String? errorMessage;
   final int duplicatesIgnored;
+  final TransferDiagnostics diagnostics;
+  final int missingCount;
+  final int roundNumber;
+  final String? resumableSession;
+  final String? statusMessage;
+  final String? currentFrameData;
 
   ReceiverTransferState copyWith({
     TransferPhase? phase,
@@ -98,6 +119,12 @@ class ReceiverTransferState {
     bool? integrityValid,
     String? errorMessage,
     int? duplicatesIgnored,
+    TransferDiagnostics? diagnostics,
+    int? missingCount,
+    int? roundNumber,
+    String? resumableSession,
+    String? statusMessage,
+    String? currentFrameData,
   }) {
     return ReceiverTransferState(
       phase: phase ?? this.phase,
@@ -109,6 +136,12 @@ class ReceiverTransferState {
       integrityValid: integrityValid ?? this.integrityValid,
       errorMessage: errorMessage ?? this.errorMessage,
       duplicatesIgnored: duplicatesIgnored ?? this.duplicatesIgnored,
+      diagnostics: diagnostics ?? this.diagnostics,
+      missingCount: missingCount ?? this.missingCount,
+      roundNumber: roundNumber ?? this.roundNumber,
+      resumableSession: resumableSession ?? this.resumableSession,
+      statusMessage: statusMessage ?? this.statusMessage,
+      currentFrameData: currentFrameData ?? this.currentFrameData,
     );
   }
 }

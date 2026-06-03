@@ -67,6 +67,12 @@ class QrCompletionScreen extends StatelessWidget {
                       _row('Error', state.errorMessage!),
                     if (state.duplicatesIgnored > 0)
                       _row('Duplicates ignored', '${state.duplicatesIgnored}'),
+                    _row('Retries', '${state.diagnostics.retries}'),
+                    _row('Duration', '${state.diagnostics.durationMs} ms'),
+                    _row(
+                      'Throughput',
+                      '${state.diagnostics.throughputBytesPerSec.toStringAsFixed(0)} B/s',
+                    ),
                   ],
                 ),
               ),
