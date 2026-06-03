@@ -3,7 +3,7 @@ abstract final class AppConstants {
   static const String appName = 'PhotonLink';
   static const String appTagline = 'Offline optical file transfer';
   static const String appVersion = '1.0.0';
-  static const String phaseLabel = 'Phase 1 — Foundation';
+  static const String phaseLabel = 'Phase 2 — QR Transfer';
 
   // SharedPreferences keys
   static const String prefThemeMode = 'theme_mode';

@@ -18,7 +18,7 @@ enum TransferMethod {
     description: 'High-density color grid data encoding',
     icon: Icons.grid_view_rounded,
     accentColor: AppColors.colorMatrixAccent,
-    isAvailable: true,
+    isAvailable: false,
   ),
   opticalStream(
     id: 'optical_stream',
@@ -26,7 +26,7 @@ enum TransferMethod {
     description: 'Continuous visual frame streaming',
     icon: Icons.videocam_rounded,
     accentColor: AppColors.opticalStreamAccent,
-    isAvailable: true,
+    isAvailable: false,
     isPreview: true,
   ),
   audio(

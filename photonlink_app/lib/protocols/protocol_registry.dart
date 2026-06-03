@@ -43,14 +43,15 @@ class ProtocolRegistry {
 
 /// Provider exposing the protocol registry for dependency injection.
 final protocolRegistryProvider = Provider<ProtocolRegistry>((ref) {
+  final qr = QrProtocol();
   return ProtocolRegistry({
     TransferMethod.qr: ProtocolBundle(
       method: TransferMethod.qr,
-      encoder: QrProtocol(),
-      decoder: QrProtocol(),
-      packetizer: QrProtocol(),
-      checksumValidator: QrProtocol(),
-      sessionManager: QrProtocol(),
+      encoder: qr,
+      decoder: qr,
+      packetizer: qr,
+      checksumValidator: qr,
+      sessionManager: qr,
     ),
     TransferMethod.colorMatrix: ProtocolBundle(
       method: TransferMethod.colorMatrix,

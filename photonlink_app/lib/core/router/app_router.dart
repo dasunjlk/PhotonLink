@@ -6,7 +6,11 @@ import '../../features/about/about_screen.dart';
 import '../../features/camera_scan/camera_scan_screen.dart';
 import '../../features/file_picker/file_picker_screen.dart';
 import '../../features/home/home_screen.dart';
+import '../../features/qr_transfer/qr_completion_screen.dart';
+import '../../features/qr_transfer/qr_receiver_screen.dart';
+import '../../features/qr_transfer/qr_sender_screen.dart';
 import '../../features/transfer_setup/transfer_setup_screen.dart';
+import '../../transfer/application/transfer_state.dart';
 import '../../history/presentation/history_screen.dart';
 import '../../protocols/transfer_method.dart';
 import '../../settings/presentation/settings_screen.dart';
@@ -20,6 +24,9 @@ abstract final class AppRoutes {
   static const settings = '/settings';
   static const history = '/history';
   static const about = '/about';
+  static const qrSend = '/qr/send';
+  static const qrReceive = '/qr/receive';
+  static const qrComplete = '/qr/complete';
 
   static String transferSetupPath(TransferMethod method) =>
       '/transfer/${method.routeName}';
@@ -80,6 +87,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.about,
         name: 'about',
         builder: (context, state) => const AboutScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.qrSend,
+        name: 'qrSend',
+        builder: (context, state) => const QrSenderScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.qrReceive,
+        name: 'qrReceive',
+        builder: (context, state) => const QrReceiverScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.qrComplete,
+        name: 'qrComplete',
+        builder: (context, state) {
+          final receiverState = state.extra as ReceiverTransferState?;
+          return QrCompletionScreen(
+            state: receiverState ?? const ReceiverTransferState(),
+          );
+        },
       ),
     ],
   );

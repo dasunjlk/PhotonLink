@@ -2,26 +2,29 @@
 
 ## Overview
 
-PhotonLink is an offline peer-to-peer file transfer platform using optical communication (QR codes, color matrices, visual frame streams). Phase 1 establishes the foundation: clean architecture, modern UI, navigation, settings, and protocol abstractions — without real transfer logic.
+PhotonLink is an offline peer-to-peer file transfer platform using optical communication (QR codes, color matrices, visual frame streams). **Phase 2** implements the QR-based optical file transfer MVP with a transport-independent transfer core and an isolated QR codec/stream layer.
 
 ## Layer Diagram
 
 ```
-┌─────────────────────────────────────────────────┐
-│                   features/                      │
-│  home · transfer_setup · camera_scan · pick · about │
-├─────────────────────────────────────────────────┤
-│  settings/  │  history/  │  shared/widgets/     │
-├─────────────────────────────────────────────────┤
-│  protocols/  │  services/  │  ui/ (tokens)       │
-├─────────────────────────────────────────────────┤
-│                    core/                         │
-│  bootstrap · router · theme · constants · errors │
-└─────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  features/  home · transfer_setup · qr_transfer · about   │
+│             camera_scan · file_picker (non-QR prototypes)  │
+├──────────────────────────────────────────────────────────┤
+│  transfer/  core (chunking, reconstruction, integrity)   │
+│             qr (frame codec, stream controller)          │
+│             application (Riverpod controllers)           │
+├──────────────────────────────────────────────────────────┤
+│  protocols/ interfaces + impl (QrProtocol)               │
+│  settings/  │  history/  │  shared/widgets/  │  ui/       │
+├──────────────────────────────────────────────────────────┤
+│  core/  bootstrap · router · theme · constants · errors  │
+└──────────────────────────────────────────────────────────┘
          │                              │
          ▼                              ▼
    SharedPreferences              native/photonlink_core
-   (local storage)               (Rust stub — Phase 2 FFI)
+   (settings, history,            (Rust stub — future FFI)
+    session progress)
 ```
 
 ## Dependency Rules
@@ -31,99 +34,109 @@ PhotonLink is an offline peer-to-peer file transfer platform using optical commu
 | `ui/` | (none — leaf) | everything else |
 | `core/` | `ui/`, `services/` | `features/` |
 | `services/` | `core/` | widgets, features |
-| `protocols/` | `core/` | widgets, features |
-| `shared/` | `ui/` | features |
+| `protocols/` | `core/`, `transfer/core/` | widgets, features |
+| `transfer/core/` | `protocols/interfaces/` | widgets, features, `transfer/qr/` |
+| `transfer/qr/` | `protocols/`, `transfer/core/` | widgets, features |
+| `transfer/application/` | `transfer/*`, `history/`, `services/` | widgets |
 | `features/` | all above | — |
-| `settings/`, `history/` | services, ui, shared | features |
 
-## State Management
+**Key rule:** Color Matrix (Phase 3+) can reuse `transfer/core/` and `protocols/interfaces/` without importing `transfer/qr/`.
 
-**Riverpod 2** with plain providers (no code generation):
+## QR Transfer Data Flow
 
-- `settingsProvider` — `StateNotifier<AppSettings>` with SharedPreferences persistence
-- `historyProvider` — `AsyncNotifier<List<TransferRecord>>` with mock repository
-- `protocolRegistryProvider` — maps `TransferMethod` → protocol bundle
-- `appRouterProvider` — go_router configuration
+```mermaid
+flowchart LR
+  subgraph sender [Sender]
+    Pick[Pick file] --> Factory[SessionFactory]
+    Factory --> Chunk[ChunkingEngine]
+    Chunk --> Codec[QrFrameCodec]
+    Codec --> Stream[QrStreamController]
+    Stream --> QR[QrImageView ECC H]
+  end
+  subgraph receiver [Receiver]
+    Scan[MobileScanner] --> Decode[QrFrameCodec]
+    Decode --> Recon[ReconstructionEngine]
+    Recon --> Verify[IntegrityVerifier]
+    Verify --> Save[path_provider]
+  end
+  QR -. optical .-> Scan
+```
+
+## Wire Format (PL2)
+
+```
+PL2|<type>|<sessionId>|<seq>|<total>|<base64Payload>
+```
+
+- `M` = metadata JSON (fileName, fileSize, totalChunks, sha256, mimeType)
+- `D` = raw chunk bytes (Base64)
+
+High QR error correction (`QrErrorCorrectLevel.H`). Sender loops all frames at adjustable FPS; receiver deduplicates by chunk ID.
+
+## Transport-Independent Interfaces
+
+Located in `lib/protocols/interfaces/`:
+
+| Interface | Role |
+|-----------|------|
+| `TransferPacket` | Sealed: `MetadataPacket`, `DataPacket` |
+| `TransferSession` | Session id, file info, state, progress |
+| `TransferEncoder` | `encodeFrame(packet) → String` |
+| `TransferDecoder` | `decodeFrame(raw) → TransferPacket?` |
+| `ChunkManager` | `split()` / `merge()` |
+
+Phase 1 legacy interfaces (`Encoder`, `Decoder`, `Packetizer`, etc.) remain for registry compatibility; `QrProtocol` delegates to Phase 2 core.
+
+## State Management (Riverpod 2)
+
+| Provider | Purpose |
+|----------|---------|
+| `senderControllerProvider` | Sender: preparing → transmitting QR frames |
+| `receiverControllerProvider` | Receiver: scan → reconstruct → verify → save |
+| `historyProvider` | Persistent transfer history |
+| `protocolRegistryProvider` | Method → protocol bundle |
+
+`TransferPhase`: idle, preparing, transmitting, receiving, reconstructing, completed, failed.
 
 ## Navigation
-
-**go_router** with declarative routes:
 
 | Route | Screen |
 |-------|--------|
 | `/` | Home |
-| `/transfer/:method` | Transfer Setup (Send/Receive) |
-| `/scan?method=` | Camera Scan |
-| `/pick?method=` | File Picker |
+| `/transfer/:method` | Transfer Setup |
+| `/qr/send` | QR Sender (file pick + QR stream) |
+| `/qr/receive` | QR Receiver (scanner + progress) |
+| `/qr/complete` | Completion (success/failure) |
+| `/scan?method=` | Camera prototype (non-QR) |
+| `/pick?method=` | File picker prototype (non-QR) |
 | `/settings` | Settings |
 | `/history` | History |
 | `/about` | About |
 
-## Protocol Abstraction
+## Session Persistence
 
-Each transfer method implements five interfaces:
+`SessionStore` (SharedPreferences) saves per-session:
 
-```dart
-abstract interface class Encoder<TIn, TOut> { ... }
-abstract interface class Decoder<TIn, TOut> { ... }
-abstract interface class Packetizer { ... }
-abstract interface class ChecksumValidator { ... }
-abstract interface class SessionManager { ... }
-```
+- sessionId, progress, receivedChunkIds, fileName, totalChunks, direction
 
-Phase 1 provides placeholder implementations that throw `UnimplementedError`. The `ProtocolRegistry` maps methods to bundles for future DI.
+Prepared for future resume; reconstructed files are written to app documents via `path_provider`.
 
-### Adding a New Transfer Method
+## Test Coverage (Phase 2)
 
-1. Add enum value to `TransferMethod` in `protocols/transfer_method.dart`
-2. Create `protocols/impl/<method>_protocol.dart` implementing all five interfaces
-3. Register in `protocolRegistryProvider` in `protocols/protocol_registry.dart`
-4. Add home card if the method should appear on the home screen
-5. Implement the Rust counterpart in `native/photonlink_core/src/protocols/`
+| Test file | Covers |
+|-----------|--------|
+| `chunk_manager_test.dart` | Chunk count, remainder, empty file, merge |
+| `chunk_ordering_test.dart` | Out-of-order merge |
+| `reconstruction_test.dart` | Rebuild, duplicates, incomplete |
+| `integrity_test.dart` | SHA-256 pass/fail, extension allowlist |
+| `qr_codec_test.dart` | PL2 encode/decode roundtrip |
 
-## Native Bridge
+Run: `flutter test`
 
-Phase 1 uses a Dart stub (`NativeBridgeStub`) implementing `PhotonLinkNative`:
+## Phase 3+ Roadmap
 
-```dart
-abstract interface class PhotonLinkNative {
-  Future<String> coreVersion();
-  Future<String> ping();
-}
-```
-
-Phase 2 will replace this with `flutter_rust_bridge` bindings to `native/photonlink_core`.
-
-## UI Design System
-
-| Token file | Purpose |
-|------------|---------|
-| `ui/colors.dart` | Brand palette, gradients, glass tints |
-| `ui/typography.dart` | Inter font scale |
-| `ui/spacing.dart` | 4px-based spacing scale |
-| `ui/motion.dart` | Animation durations and curves |
-| `ui/radii.dart` | Border radius tokens |
-
-Key widgets: `GlassCard` (backdrop blur), `GradientScaffold` (animated background), `ScanFrameOverlay` (camera framing).
-
-## Rust Core (Phase 1 Skeleton)
-
-Located at `native/photonlink_core/`. Mirrors Dart protocol traits:
-
-- `Encoder`, `Decoder`, `Packetizer`, `ChecksumValidator`, `SessionManager`
-- `core_version()` public API
-- Commented FFI skeleton in `src/ffi.rs`
-
-Not built or linked by the Flutter build in Phase 1.
-
-## Phase 2 Roadmap
-
-- [ ] Wire Rust core via flutter_rust_bridge
-- [ ] Implement QR encoding/decoding
-- [ ] Implement Color Matrix protocol
-- [ ] Implement Optical Stream protocol
-- [ ] Real file transmission pipeline
-- [ ] Persistent transfer history
-- [ ] Compression and encryption
-- [ ] Audio and Flash transfer methods
-- [ ] iOS and desktop platform support
+- Color Matrix / Optical Stream protocols (reuse `transfer/core/`)
+- Rust FFI acceleration
+- Compression, encryption, advanced ECC
+- Full session resume UX
+- Audio / Flash methods

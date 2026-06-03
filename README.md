@@ -2,22 +2,22 @@
 
 **Offline peer-to-peer file transfer using optical communication.**
 
-PhotonLink enables file transfer between devices using only screens and cameras — no network, no servers, no Bluetooth. Transfer methods include QR code streams, color matrices, and visual frame encoding.
+PhotonLink enables file transfer between devices using only screens and cameras — no network, no servers, no Bluetooth.
 
-## Status: Phase 1 — Foundation
+## Status: Phase 2 — QR Transfer MVP
 
-This release establishes the app scaffold:
+This release adds **QR-based optical file transfer** for small files:
 
-- Modern animated UI with dark/light themes and glassmorphism cards
-- Navigation with go_router (home, settings, history, camera, file picker, about)
-- Settings system with persistent preferences
-- Transfer history UI with mock data
-- Camera preview prototype with scan framing overlay
-- Local file picker prototype
-- Protocol abstraction layer (interfaces only, no implementations)
-- Rust core skeleton (not yet wired via FFI)
+- Supported types: `txt`, `pdf`, `jpg`, `png`, `zip`
+- Session metadata (ID, file name, size, chunk count, SHA-256)
+- Fixed-size chunking with reconstruction and duplicate handling
+- High-ECC QR frame streaming (adjustable frame rate on sender)
+- Continuous QR scanning on receiver (`mobile_scanner`)
+- SHA-256 integrity verification
+- Persistent transfer history
+- Session progress persistence (resume-ready foundation)
 
-**No real file transfer or optical encoding in this phase.**
+**Not in this phase:** Color Matrix, Optical Stream, Audio, Rust FFI, encryption, compression, advanced ECC.
 
 ## Quick Start
 
@@ -27,7 +27,9 @@ flutter pub get
 flutter run
 ```
 
-See [docs/SETUP.md](docs/SETUP.md) for full setup instructions including platform initialization.
+**Manual QR transfer test:** Device A → QR Transfer → Send → pick file → Start Transmission. Device B → QR Transfer → Receive → scan sender screen until progress completes.
+
+See [docs/SETUP.md](docs/SETUP.md) for platform setup.
 
 ## Tech Stack
 
@@ -36,40 +38,46 @@ See [docs/SETUP.md](docs/SETUP.md) for full setup instructions including platfor
 | Frontend | Flutter 3.22+, Dart 3.3+ |
 | State | Riverpod 2 |
 | Navigation | go_router |
-| Core Engine | Rust (skeleton, Phase 2 FFI) |
-| Platform | Android first, iOS/desktop planned |
+| QR render | qr_flutter (ECC level H) |
+| QR scan | mobile_scanner |
+| Integrity | crypto (SHA-256) |
+| Storage | shared_preferences, path_provider |
 
 ## Project Structure
 
 ```
 PhotonLink/
-├── photonlink_app/          # Flutter app
-│   └── lib/
-│       ├── core/            # Bootstrap, router, theme
-│       ├── features/        # Screens
-│       ├── shared/          # Reusable widgets
-│       ├── services/        # Storage, permissions, logger
-│       ├── protocols/       # Transfer interfaces
-│       ├── settings/        # Settings module
-│       ├── history/         # History module
-│       └── ui/              # Design tokens
-├── native/photonlink_core/  # Rust engine skeleton
-└── docs/                    # Architecture & setup guides
+├── photonlink_app/lib/
+│   ├── core/              # Bootstrap, router, theme
+│   ├── protocols/         # Interfaces + QrProtocol
+│   ├── transfer/
+│   │   ├── core/          # Chunking, reconstruction, integrity (reusable)
+│   │   ├── qr/            # QR codec + stream (isolated)
+│   │   └── application/   # Riverpod controllers
+│   ├── features/
+│   │   └── qr_transfer/   # Sender, receiver, completion UI
+│   ├── history/           # Persistent history
+│   ├── settings/
+│   ├── services/
+│   └── ui/
+├── native/photonlink_core/
+└── docs/
 ```
 
-## Dependencies
+## Dependencies (Phase 2)
 
-- `flutter_riverpod` — state management
-- `go_router` — navigation
-- `camera` — camera preview
-- `file_picker` — local file selection
-- `permission_handler` — runtime permissions
-- `shared_preferences` — settings persistence
-- `google_fonts` — Inter typography
-- `flutter_animate` — entry animations
-- `package_info_plus` — app version
-- `logger` — structured logging
-- `intl` — date formatting
+**Core:** `flutter_riverpod`, `go_router`, `shared_preferences`, `file_picker`, `permission_handler`, `google_fonts`, `flutter_animate`, `logger`, `intl`, `package_info_plus`, `camera`
+
+**Phase 2:** `qr_flutter`, `mobile_scanner`, `crypto`, `path_provider`
+
+## Tests
+
+```bash
+cd photonlink_app
+flutter test
+```
+
+15+ unit tests covering chunking, ordering, reconstruction, integrity, QR codec, plus widget smoke tests.
 
 ## Documentation
 
@@ -78,4 +86,4 @@ PhotonLink/
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+See [LICENSE](LICENSE).
