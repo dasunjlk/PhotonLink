@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../protocols/transfer_method.dart';
-import '../data/mock_history_repository.dart';
+import '../../services/storage/preferences_service.dart';
+import '../data/persistent_history_repository.dart';
 import '../domain/transfer_record.dart';
 
 /// Loads and filters transfer history records.
@@ -18,8 +19,8 @@ class HistoryController extends AsyncNotifier<List<TransferRecord>> {
   }
 }
 
-final historyRepositoryProvider = Provider<MockHistoryRepository>(
-  (ref) => MockHistoryRepository(),
+final historyRepositoryProvider = Provider<PersistentHistoryRepository>(
+  (ref) => PersistentHistoryRepository(ref.watch(preferencesServiceProvider)),
 );
 
 final historyProvider =

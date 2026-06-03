@@ -31,7 +31,7 @@ void main() {
     );
   });
 
-  List<Override> get overrides => [
+  List<Override> buildOverrides() => [
         preferencesServiceProvider.overrideWithValue(
           PreferencesService(prefs),
         ),
@@ -42,11 +42,12 @@ void main() {
   testWidgets('HomeScreen renders app title and transfer methods', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: overrides,
+        overrides: buildOverrides(),
         child: const MaterialApp(home: HomeScreen()),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
 
     expect(find.text(AppConstants.appName), findsOneWidget);
     expect(find.text('QR Transfer'), findsOneWidget);
@@ -57,11 +58,12 @@ void main() {
   testWidgets('PhotonLinkApp boots with router', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: overrides,
+        overrides: buildOverrides(),
         child: const PhotonLinkApp(),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
 
     expect(find.text(AppConstants.appName), findsOneWidget);
   });

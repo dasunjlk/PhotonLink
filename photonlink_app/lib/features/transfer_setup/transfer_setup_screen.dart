@@ -66,9 +66,15 @@ class TransferSetupScreen extends StatelessWidget {
                 label: 'Send File',
                 icon: Icons.upload_rounded,
                 color: method.accentColor,
-                onPressed: () => context.push(
-                  '${AppRoutes.pick}?method=${method.routeName}',
-                ),
+                onPressed: () {
+                  if (method == TransferMethod.qr) {
+                    context.push(AppRoutes.qrSend);
+                  } else {
+                    context.push(
+                      '${AppRoutes.pick}?method=${method.routeName}',
+                    );
+                  }
+                },
               ),
               const SizedBox(height: AppSpacing.md),
               AnimatedPillButton(
@@ -76,9 +82,15 @@ class TransferSetupScreen extends StatelessWidget {
                 icon: Icons.download_rounded,
                 color: method.accentColor,
                 isOutlined: true,
-                onPressed: () => context.push(
-                  '${AppRoutes.scan}?method=${method.routeName}',
-                ),
+                onPressed: () {
+                  if (method == TransferMethod.qr) {
+                    context.push(AppRoutes.qrReceive);
+                  } else {
+                    context.push(
+                      '${AppRoutes.scan}?method=${method.routeName}',
+                    );
+                  }
+                },
               ),
             ],
           ),
