@@ -29,7 +29,7 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
   String? _keyExchangePayload;
   final _keyProvider = EncryptionKeyProvider();
   final _keyExchange = SessionKeyExchange();
-  late DiagnosticsCollector _diagnostics;
+  late FrameDiagnosticsCollector _diagnostics;
 
   @override
   ColorMatrixSenderState build() {
@@ -70,7 +70,7 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
       }
 
       final file = File(filePath);
-      TransferLimits.validateFileSize(await file.length());
+      TransferLimits.validateColorMatrixFileSize(await file.length());
       final bytes = Uint8List.fromList(await file.readAsBytes());
 
       final settings = ref.read(settingsProvider);
@@ -114,6 +114,7 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
         chunkSize: chunkSize,
         sessionIdOverride: sessionId,
         skipQrFrameValidation: true,
+        maxFileBytes: TransferLimits.maxColorMatrixFileBytes,
       );
 
       if (!ColorMatrixTransferLimits.allFramesFit(

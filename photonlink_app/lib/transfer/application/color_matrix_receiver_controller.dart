@@ -26,7 +26,7 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
   final _recon = ReconstructionEngine();
   final _keyProvider = EncryptionKeyProvider();
   final _keyExchange = SessionKeyExchange();
-  late DiagnosticsCollector _diagnostics;
+  late FrameDiagnosticsCollector _diagnostics;
   bool _finalizing = false;
 
   @override
@@ -99,6 +99,7 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
         fileSize: metadata.fileSize,
         totalChunks: metadata.totalChunks,
         sha256: metadata.sha256,
+        maxBytes: TransferLimits.maxColorMatrixFileBytes,
       );
     } catch (_) {
       _diagnostics.recordFrameCorrupted();
@@ -188,6 +189,12 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
       if (wireBytes == null || meta == null) {
         throw StateError('Incomplete reconstruction');
       }
+      if (wireBytes.length != meta.fileSize) {
+        throw StateError('Reconstructed wire size mismatch');
+      }
+      if (!_verifier.verify(wireBytes, meta.sha256)) {
+        throw StateError('Wire payload SHA-256 check failed');
+      }
 
       final plaintext = await _pipeline.restorePlaintext(
         wireBytes: wireBytes,
@@ -200,22 +207,32 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
         keyProvider: _keyProvider,
       );
 
+      final expectedSize = meta.originalSize ?? meta.fileSize;
       final expectedHash = meta.originalSha256 ?? meta.sha256;
-      final valid = _verifier.verify(plaintext, expectedHash);
+      if (plaintext.length != expectedSize) {
+        throw StateError('Plaintext size mismatch after decompress');
+      }
+      if (!_verifier.verify(plaintext, expectedHash)) {
+        throw StateError('Original file SHA-256 check failed');
+      }
 
       final dir = await getApplicationDocumentsDirectory();
-      final outFile = File('${dir.path}/${meta.fileName}');
-      await outFile.writeAsBytes(plaintext, flush: true);
+      final safeName = meta.fileName.replaceAll(RegExp(r'[^\w.\-]'), '_');
+      final outputPath = '${dir.path}/$safeName';
+      await File(outputPath).writeAsBytes(plaintext, flush: true);
+
+      _keyProvider.clear();
 
       state = state.copyWith(
         phase: TransferPhase.completed,
-        outputPath: outFile.path,
-        integrityValid: valid,
+        outputPath: outputPath,
+        integrityValid: true,
         progress: 1.0,
         receivedChunks: meta.totalChunks,
         missingChunks: 0,
       );
     } catch (e) {
+      _keyProvider.clear();
       state = state.copyWith(
         phase: TransferPhase.failed,
         errorMessage: e.toString(),

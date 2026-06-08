@@ -1,17 +1,43 @@
-# photonlink_app
+# PhotonLink App
 
-A new Flutter project.
+Flutter client for **PhotonLink** — offline peer-to-peer optical file transfer.
 
-## Getting Started
+## Quick Start
 
-This project is a starting point for a Flutter application.
+```bash
+flutter pub get
+flutter run
+flutter test
+flutter analyze
+```
 
-A few resources to get you started if this is your first Flutter project:
+## Transports
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+| Method | Route prefix | Max file size |
+|--------|--------------|---------------|
+| QR (bidirectional ACK/NAK) | `/qr/*` | 512 KB |
+| Color Matrix (cyclic broadcast) | `/color-matrix/*` | 2 MB |
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Project layout
+
+```
+lib/
+├── core/           # Bootstrap, router, theme, constants
+├── features/       # Screens (home, qr_transfer, color_matrix_transfer, …)
+├── transfer/       # Transfer engine (QR, color_matrix, reliability, encryption)
+├── protocols/      # Interfaces + transport_registry
+├── settings/       # App settings
+├── history/        # Transfer history
+└── shared/         # Reusable widgets
+```
+
+## Documentation
+
+See the repository root:
+
+- [README](../README.md)
+- [Architecture](../docs/ARCHITECTURE.md)
+- [Phase 1–5 Audit](../docs/AUDIT_PHASE1-5.md)
+- [Color Matrix Format](../docs/COLOR_MATRIX_FORMAT.md)
+- [Security](../docs/SECURITY.md)
+- [Setup](../docs/SETUP.md)

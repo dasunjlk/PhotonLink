@@ -115,7 +115,7 @@ See [COLOR_MATRIX_FORMAT.md](COLOR_MATRIX_FORMAT.md).
 
 Run: `cd photonlink_app && flutter test`
 
-Includes Phase 3–4 QR reliability, compression, encryption, pipeline, scheduler, throughput, plus Color Matrix encode/decode/generation/detection tests.
+Includes Phase 3–4 QR reliability, compression, encryption, pipeline, scheduler, throughput, plus Color Matrix encode/decode/generation/detection tests. See [AUDIT_PHASE1-5.md](AUDIT_PHASE1-5.md) for coverage gaps and remediation status.
 
 ## Future Transports
 

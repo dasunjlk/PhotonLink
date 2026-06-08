@@ -56,13 +56,6 @@ final transportRegistryProvider = Provider<TransportRegistry>((ref) {
   });
 });
 
-/// Convenience accessor for QR transport.
-final qrTransportProvider = Provider<QrTransport>((ref) {
-  return ref.watch(transportRegistryProvider).transportFor<String>(
-        TransferMethod.qr,
-      ) as QrTransport;
-});
-
 /// Convenience accessor for Color Matrix transport.
 final colorMatrixTransportProvider = Provider<ColorMatrixTransport>((ref) {
   return ref.watch(transportRegistryProvider).transportFor<ColorMatrixFrame>(

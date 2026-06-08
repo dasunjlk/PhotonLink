@@ -3,22 +3,22 @@ import 'dart:convert';
 import '../../protocols/interfaces/reliability/transfer_diagnostics.dart';
 import '../../services/storage/preferences_service.dart';
 
-/// Collects and persists transfer diagnostics metrics.
-class DiagnosticsCollector {
-  DiagnosticsCollector(this._prefs);
+/// Collects and persists frame-level diagnostics (Color Matrix path).
+class FrameDiagnosticsCollector {
+  FrameDiagnosticsCollector(this._prefs);
 
   final PreferencesService _prefs;
   static const _keyPrefix = 'transfer_diagnostics_';
 
-  TransferDiagnostics _current = const TransferDiagnostics();
+  FrameDiagnostics _current = const FrameDiagnostics();
   final List<double> _decodeTimes = [];
   DateTime? _receiveStart;
   int _bytesReceived = 0;
 
-  TransferDiagnostics get current => _current;
+  FrameDiagnostics get current => _current;
 
   void reset() {
-    _current = const TransferDiagnostics();
+    _current = const FrameDiagnostics();
     _decodeTimes.clear();
     _receiveStart = null;
     _bytesReceived = 0;
@@ -93,10 +93,10 @@ class DiagnosticsCollector {
     );
   }
 
-  Future<TransferDiagnostics?> load(String sessionId) async {
+  Future<FrameDiagnostics?> load(String sessionId) async {
     final raw = _prefs.getString('$_keyPrefix$sessionId');
     if (raw == null) return null;
-    return TransferDiagnostics.fromJson(
+    return FrameDiagnostics.fromJson(
       jsonDecode(raw) as Map<String, dynamic>,
     );
   }

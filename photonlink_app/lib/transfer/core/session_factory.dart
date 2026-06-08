@@ -63,8 +63,13 @@ class SessionFactory {
     int? chunkSize,
     String? sessionIdOverride,
     bool skipQrFrameValidation = false,
+    int maxFileBytes = TransferLimits.maxQrFileBytes,
   }) {
-    TransferLimits.validateFileSize(wireBytes.length);
+    TransferLimits.validateFileSize(
+      wireBytes.length,
+      maxBytes: maxFileBytes,
+      transportLabel: skipQrFrameValidation ? 'Color Matrix' : 'QR',
+    );
 
     final sessionId = sessionIdOverride ?? generateSessionId();
 
