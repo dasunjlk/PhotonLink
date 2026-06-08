@@ -18,7 +18,7 @@ enum TransferMethod {
     description: 'High-density color grid data encoding',
     icon: Icons.grid_view_rounded,
     accentColor: AppColors.colorMatrixAccent,
-    isAvailable: false,
+    isAvailable: true,
   ),
   opticalStream(
     id: 'optical_stream',

@@ -7,10 +7,10 @@ import 'qr_frame_codec.dart';
 /// Drives cyclic QR frame emission for the sender.
 class QrStreamController {
   QrStreamController({
-    TransferEncoder? encoder,
+    TransferEncoder<String>? encoder,
   }) : _encoder = encoder ?? const QrFrameCodec();
 
-  final TransferEncoder _encoder;
+  final TransferEncoder<String> _encoder;
   Timer? _timer;
   List<TransferPacket> _packets = [];
   int _frameIndex = 0;

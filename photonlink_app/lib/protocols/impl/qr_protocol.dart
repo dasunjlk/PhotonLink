@@ -4,6 +4,7 @@ import '../../transfer/core/chunking_engine.dart';
 import '../../transfer/core/integrity_verifier.dart';
 import '../../transfer/core/session_factory.dart';
 import '../../transfer/qr/qr_frame_codec.dart';
+import '../../transfer/qr/qr_transport.dart';
 import '../interfaces/checksum_validator.dart';
 import '../interfaces/decoder.dart';
 import '../interfaces/encoder.dart';
@@ -37,15 +38,18 @@ class QrProtocol
   final SessionFactory _sessionFactory;
   final QrFrameCodec _codec;
 
-  TransferEncoder get encoder => _codec;
-  TransferDecoder get decoder => _codec;
+  TransferEncoder<String> get encoder => _codec;
+  TransferDecoder<String> get decoder => _codec;
 
   @override
   Stream<String> encode(Uint8List input) async* {
-    final bundle = _sessionFactory.prepareSenderSession(
+    const transport = QrTransport();
+    final bundle = await _sessionFactory.prepareSenderSession(
       fileBytes: input,
       fileName: 'file',
       mimeType: 'application/octet-stream',
+      limits: transport.limits,
+      encoder: transport.encoder,
     );
     for (final packet in bundle.allPackets) {
       yield _codec.encodeFrame(packet);

@@ -6,6 +6,9 @@ import '../../features/about/about_screen.dart';
 import '../../features/camera_scan/camera_scan_screen.dart';
 import '../../features/file_picker/file_picker_screen.dart';
 import '../../features/home/home_screen.dart';
+import '../../features/color_matrix_transfer/color_matrix_completion_screen.dart';
+import '../../features/color_matrix_transfer/color_matrix_receiver_screen.dart';
+import '../../features/color_matrix_transfer/color_matrix_sender_screen.dart';
 import '../../features/qr_transfer/qr_completion_screen.dart';
 import '../../features/qr_transfer/qr_receiver_screen.dart';
 import '../../features/qr_transfer/qr_sender_screen.dart';
@@ -27,6 +30,9 @@ abstract final class AppRoutes {
   static const qrSend = '/qr/send';
   static const qrReceive = '/qr/receive';
   static const qrComplete = '/qr/complete';
+  static const colorMatrixSend = '/color-matrix/send';
+  static const colorMatrixReceive = '/color-matrix/receive';
+  static const colorMatrixComplete = '/color-matrix/complete';
 
   static String transferSetupPath(TransferMethod method) =>
       '/transfer/${method.routeName}';
@@ -104,6 +110,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final receiverState = state.extra as ReceiverTransferState?;
           return QrCompletionScreen(
+            state: receiverState ?? const ReceiverTransferState(),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.colorMatrixSend,
+        name: 'colorMatrixSend',
+        builder: (context, state) => const ColorMatrixSenderScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.colorMatrixReceive,
+        name: 'colorMatrixReceive',
+        builder: (context, state) => const ColorMatrixReceiverScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.colorMatrixComplete,
+        name: 'colorMatrixComplete',
+        builder: (context, state) {
+          final receiverState = state.extra as ReceiverTransferState?;
+          return ColorMatrixCompletionScreen(
             state: receiverState ?? const ReceiverTransferState(),
           );
         },

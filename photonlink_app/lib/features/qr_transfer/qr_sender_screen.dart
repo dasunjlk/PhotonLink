@@ -53,7 +53,7 @@ class _QrSenderScreenState extends ConsumerState<QrSenderScreen> {
         return;
       }
 
-      ref.read(senderControllerProvider.notifier).reset();
+      ref.read(senderControllerProvider(TransferMethod.qr).notifier).reset();
       setState(() {
         _selectedFile = file;
         _isPicking = false;
@@ -70,14 +70,15 @@ class _QrSenderScreenState extends ConsumerState<QrSenderScreen> {
     final file = _selectedFile;
     if (file?.path == null) return;
 
-    final notifier = ref.read(senderControllerProvider.notifier);
+    final notifier =
+        ref.read(senderControllerProvider(TransferMethod.qr).notifier);
     await notifier.prepareTransfer(
       filePath: file!.path!,
       fileName: file.name,
       extension: file.extension,
     );
 
-    final state = ref.read(senderControllerProvider);
+    final state = ref.read(senderControllerProvider(TransferMethod.qr));
     if (state.phase == TransferPhase.failed) return;
 
     await notifier.startTransmission();
@@ -92,7 +93,7 @@ class _QrSenderScreenState extends ConsumerState<QrSenderScreen> {
 
   @override
   void dispose() {
-    ref.read(senderControllerProvider.notifier).reset();
+    ref.read(senderControllerProvider(TransferMethod.qr).notifier).reset();
     super.dispose();
   }
 
@@ -100,7 +101,7 @@ class _QrSenderScreenState extends ConsumerState<QrSenderScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final accent = TransferMethod.qr.accentColor;
-    final senderState = ref.watch(senderControllerProvider);
+    final senderState = ref.watch(senderControllerProvider(TransferMethod.qr));
     final isTransmitting = senderState.phase == TransferPhase.transmitting;
     final isPreparing = senderState.phase == TransferPhase.preparing;
     final session = senderState.session;
@@ -115,7 +116,7 @@ class _QrSenderScreenState extends ConsumerState<QrSenderScreen> {
               if (isTransmitting) ...[
                 Center(
                   child: QrFrameDisplay(
-                    data: senderState.currentFrameData,
+                    data: senderState.currentQrFrame,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -148,7 +149,8 @@ class _QrSenderScreenState extends ConsumerState<QrSenderScreen> {
                         divisions: 9,
                         label: '${senderState.framesPerSecond.toStringAsFixed(1)} fps',
                         onChanged: (v) => ref
-                            .read(senderControllerProvider.notifier)
+                            .read(senderControllerProvider(TransferMethod.qr)
+                                .notifier)
                             .setFrameRate(v),
                       ),
                     ),
@@ -161,7 +163,10 @@ class _QrSenderScreenState extends ConsumerState<QrSenderScreen> {
                   icon: Icons.stop_rounded,
                   color: theme.colorScheme.error,
                   onPressed: () {
-                    ref.read(senderControllerProvider.notifier).stopTransmission();
+                    ref
+                        .read(senderControllerProvider(TransferMethod.qr)
+                            .notifier)
+                        .stopTransmission();
                   },
                 ),
               ] else ...[

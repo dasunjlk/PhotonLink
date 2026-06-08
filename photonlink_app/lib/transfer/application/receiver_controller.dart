@@ -8,39 +8,103 @@ import '../../history/application/history_controller.dart';
 import '../../history/domain/transfer_record.dart';
 import '../../protocols/interfaces/transfer_packet.dart';
 import '../../protocols/interfaces/transfer_session.dart';
+import '../../protocols/transport_registry.dart';
 import '../../protocols/transfer_method.dart';
+import '../color_matrix/color_matrix_frame.dart';
 import '../core/integrity_verifier.dart';
+import '../core/payload_pipeline.dart';
 import '../core/reconstruction_engine.dart';
-import '../core/session_store.dart';
 import '../core/transfer_limits.dart';
-import '../qr/qr_frame_codec.dart';
+import '../diagnostics/diagnostics_collector.dart';
+import '../reliability/missing_packet_tracker_impl.dart';
+import '../reliability/retry_manager_impl.dart';
+import '../reliability/transfer_recovery_manager_impl.dart';
 import 'transfer_providers.dart';
 import 'transfer_state.dart';
 
 /// Manages receiver lifecycle: scan -> reconstruct -> verify -> save.
-class ReceiverController extends Notifier<ReceiverTransferState> {
+class ReceiverController
+    extends FamilyNotifier<ReceiverTransferState, TransferMethod> {
   ReconstructionEngine? _reconstruction;
-  int _duplicatesIgnored = 0;
+  MissingPacketTrackerImpl? _missingTracker;
+  RetryManagerImpl? _retryManager;
+  DiagnosticsCollector? _diagnostics;
   bool _isFinalizing = false;
+  String _passphrase = '';
 
   @override
-  ReceiverTransferState build() {
-    return const ReceiverTransferState();
+  ReceiverTransferState build(TransferMethod method) {
+    return ReceiverTransferState(method: method);
   }
 
-  QrFrameCodec get _codec => ref.read(qrFrameCodecProvider);
   IntegrityVerifier get _verifier => ref.read(integrityVerifierProvider);
-  SessionStore get _sessionStore => ref.read(sessionStoreProvider);
+  PayloadPipeline get _pipeline => ref.read(payloadPipelineProvider);
+  DiagnosticsCollector get _diag {
+    _diagnostics ??= ref.read(diagnosticsCollectorProvider);
+    return _diagnostics!;
+  }
 
-  void startReceiving() {
+  TransferRecoveryManagerImpl get _recovery =>
+      ref.read(transferRecoveryManagerProvider);
+
+  void startReceiving({String passphrase = ''}) {
+    _passphrase = passphrase;
     _reconstruction = ReconstructionEngine();
-    _duplicatesIgnored = 0;
+    _missingTracker = MissingPacketTrackerImpl();
+    _retryManager = RetryManagerImpl();
+    _diag.reset();
     _isFinalizing = false;
-    state = const ReceiverTransferState(phase: TransferPhase.receiving);
+    state = ReceiverTransferState(
+      phase: TransferPhase.receiving,
+      method: arg,
+    );
   }
 
   /// Processes a raw QR scan string.
-  void onFrameScanned(String raw) {
+  void onQrFrameScanned(String raw) {
+    final transport = ref.read(transportRegistryProvider).get(TransferMethod.qr).transport;
+    final start = DateTime.now();
+    final packet = transport.decoder.decodeFrame(raw);
+    final elapsed = DateTime.now().difference(start);
+    _diag.recordDecodeTime(elapsed);
+    if (packet == null) {
+      _diag.recordFrameCorrupted();
+      state = state.copyWith(diagnostics: _diag.current);
+      return;
+    }
+    _processPacket(packet, payloadBytes: packet is DataPacket ? packet.payload.length : 0);
+  }
+
+  /// Processes a decoded Color Matrix frame.
+  void onColorMatrixFrame(ColorMatrixFrame frame, {double detectionAccuracy = 1.0}) {
+    final transport =
+        ref.read(transportRegistryProvider).get(TransferMethod.colorMatrix).transport;
+    final start = DateTime.now();
+    final packet = transport.decoder.decodeFrame(frame);
+    final elapsed = DateTime.now().difference(start);
+    _diag.recordDecodeTime(elapsed);
+    _diag.recordDetectionAccuracy(detectionAccuracy);
+
+    if (packet == null) {
+      _diag.recordFrameCorrupted();
+      state = state.copyWith(
+        diagnostics: _diag.current,
+        detectionAccuracy: detectionAccuracy,
+      );
+      return;
+    }
+    _processPacket(
+      packet,
+      payloadBytes: packet is DataPacket ? packet.payload.length : 0,
+      detectionAccuracy: detectionAccuracy,
+    );
+  }
+
+  void _processPacket(
+    TransferPacket packet, {
+    int payloadBytes = 0,
+    double detectionAccuracy = 1.0,
+  }) {
     if (state.phase == TransferPhase.completed ||
         state.phase == TransferPhase.failed ||
         state.phase == TransferPhase.reconstructing ||
@@ -48,26 +112,38 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
       return;
     }
 
-    final packet = _codec.decodeFrame(raw);
-    if (packet == null) return;
-
     _reconstruction ??= ReconstructionEngine();
+    _missingTracker ??= MissingPacketTrackerImpl();
 
     if (packet is MetadataPacket) {
       if (_reconstruction!.hasMetadata &&
           _reconstruction!.metadata!.sessionId != packet.sessionId) {
         _reconstruction!.reset();
-        _duplicatesIgnored = 0;
+        _missingTracker!.reset();
       }
+      _missingTracker!.setTotalExpected(packet.totalChunks);
     }
 
     final isNew = _reconstruction!.ingest(packet);
+    _diag.recordFrameReceived(payloadBytes: payloadBytes);
     if (!isNew) {
-      _duplicatesIgnored++;
+      _diag.recordDuplicate();
+      _missingTracker!.onPacketReceived(
+        packet is DataPacket ? packet.chunkId : 0,
+        isNew: false,
+      );
+    } else if (packet is DataPacket) {
+      _missingTracker!.onPacketReceived(packet.chunkId, isNew: true);
     }
 
     final metadata = _reconstruction!.metadata;
     if (metadata == null) return;
+
+    final missing = _missingTracker!.missingPacketIds.length;
+    _diag.updateMissingCount(missing);
+    if (missing > 0) {
+      _diag.recordFrameLost(missing);
+    }
 
     final session = TransferSession.fromMetadata(metadata).copyWith(
       state: TransferSessionState.receiving,
@@ -81,19 +157,18 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
       receivedChunks: _reconstruction!.receivedCount,
       totalChunks: metadata.totalChunks,
       progress: _reconstruction!.progress,
-      duplicatesIgnored: _duplicatesIgnored,
+      duplicatesIgnored: _diag.current.duplicatesIgnored,
+      diagnostics: _diag.current,
+      detectionAccuracy: detectionAccuracy,
+      missingChunks: missing,
     );
 
     unawaited(
-      _sessionStore.save(
-        SessionSnapshot(
-          sessionId: metadata.sessionId,
-          progress: _reconstruction!.progress,
-          receivedChunkIds: _reconstruction!.receivedChunkIds.toList(),
-          fileName: metadata.fileName,
-          totalChunks: metadata.totalChunks,
-          direction: 'receive',
-        ),
+      _recovery.persistProgress(
+        sessionId: metadata.sessionId,
+        receivedChunkIds: _reconstruction!.receivedChunkIds,
+        metadata: metadata,
+        direction: 'receive',
       ),
     );
 
@@ -108,6 +183,7 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
 
     state = state.copyWith(phase: TransferPhase.reconstructing);
 
+    const finalizeKey = 'finalize';
     try {
       final metadata = _reconstruction?.metadata;
       if (metadata == null) {
@@ -117,16 +193,31 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
 
       final rebuilt = _reconstruction!.rebuild();
       if (rebuilt == null) {
+        if (_retryManager!.shouldRetry(finalizeKey)) {
+          _retryManager!.recordAttempt(finalizeKey);
+          _diag.recordFrameRetried();
+          _isFinalizing = false;
+          return;
+        }
         await _fail('Failed to reconstruct file (incomplete or invalid chunks)');
         return;
       }
 
-      if (rebuilt.length != metadata.fileSize) {
+      final transformed = await _pipeline.reverse(
+        transformed: rebuilt,
+        compression: metadata.compression,
+        encryption: metadata.encryption,
+        passphrase: _passphrase,
+        kdfSalt: metadata.kdfSalt,
+        encryptionNonce: metadata.encryptionNonce,
+      );
+
+      if (transformed.length != metadata.fileSize) {
         await _fail('Reconstructed size does not match metadata');
         return;
       }
 
-      final valid = _verifier.verify(rebuilt, metadata.sha256);
+      final valid = _verifier.verify(transformed, metadata.sha256);
       if (!valid) {
         await _fail('SHA-256 integrity check failed');
         return;
@@ -135,15 +226,16 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
       final dir = await getApplicationDocumentsDirectory();
       final safeName = metadata.fileName.replaceAll(RegExp(r'[^\w.\-]'), '_');
       final outputPath = '${dir.path}/$safeName';
-      await File(outputPath).writeAsBytes(rebuilt);
+      await File(outputPath).writeAsBytes(transformed);
 
-      await _sessionStore.remove(metadata.sessionId);
+      await _recovery.clearSnapshot(metadata.sessionId);
+      await _diag.persist(metadata.sessionId);
 
       await ref.read(historyRepositoryProvider).addRecord(
             TransferRecord(
               id: '${metadata.sessionId}-${DateTime.now().millisecondsSinceEpoch}',
               fileName: metadata.fileName,
-              method: TransferMethod.qr,
+              method: arg,
               sizeBytes: metadata.fileSize,
               status: TransferStatus.success,
               timestamp: DateTime.now(),
@@ -155,6 +247,7 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
 
       state = ReceiverTransferState(
         phase: TransferPhase.completed,
+        method: arg,
         session: TransferSession.fromMetadata(metadata).copyWith(
           state: TransferSessionState.completed,
           progress: 1.0,
@@ -165,7 +258,8 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
         progress: 1.0,
         outputPath: outputPath,
         integrityValid: true,
-        duplicatesIgnored: _duplicatesIgnored,
+        duplicatesIgnored: _diag.current.duplicatesIgnored,
+        diagnostics: _diag.current,
       );
     } on TransferLimitException catch (e) {
       await _fail(e.message);
@@ -181,7 +275,7 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
             TransferRecord(
               id: '${metadata.sessionId}-fail-${DateTime.now().millisecondsSinceEpoch}',
               fileName: metadata.fileName,
-              method: TransferMethod.qr,
+              method: arg,
               sizeBytes: metadata.fileSize,
               status: TransferStatus.failed,
               timestamp: DateTime.now(),
@@ -201,8 +295,10 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
   void reset() {
     _reconstruction?.reset();
     _reconstruction = null;
-    _duplicatesIgnored = 0;
+    _missingTracker = null;
+    _retryManager = null;
+    _diagnostics = null;
     _isFinalizing = false;
-    state = const ReceiverTransferState();
+    state = ReceiverTransferState(method: arg);
   }
 }

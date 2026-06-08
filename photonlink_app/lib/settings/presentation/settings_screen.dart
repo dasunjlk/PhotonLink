@@ -60,7 +60,7 @@ class SettingsScreen extends ConsumerWidget {
                       SwitchListTile(
                         title: const Text('Compression'),
                         subtitle: const Text(
-                          'Compress files before transmission (Phase 2)',
+                          'Compress files before transmission (gzip)',
                         ),
                         value: settings.compressionEnabled,
                         onChanged: controller.toggleCompression,
@@ -69,10 +69,100 @@ class SettingsScreen extends ConsumerWidget {
                       SwitchListTile(
                         title: const Text('Encryption'),
                         subtitle: const Text(
-                          'Encrypt data during transfer (Phase 2)',
+                          'Encrypt data with ChaCha20-Poly1305',
                         ),
                         value: settings.encryptionEnabled,
                         onChanged: controller.toggleEncryption,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                const SectionHeader(
+                  title: 'Color Matrix',
+                  subtitle: 'Optical grid transfer settings',
+                ),
+                GlassCard(
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.grid_view_rounded),
+                        title: const Text('Matrix Size'),
+                        subtitle: Text('${settings.colorMatrixSize}×${settings.colorMatrixSize}'),
+                        trailing: DropdownButton<int>(
+                          value: settings.colorMatrixSize,
+                          underline: const SizedBox.shrink(),
+                          items: const [
+                            DropdownMenuItem(value: 16, child: Text('16×16')),
+                            DropdownMenuItem(value: 24, child: Text('24×24')),
+                            DropdownMenuItem(value: 32, child: Text('32×32')),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              controller.updateColorMatrixSize(value);
+                            }
+                          },
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.speed_rounded),
+                        title: const Text('Frame Rate'),
+                        subtitle: Text(
+                          '${settings.colorTransferFrameRate.toStringAsFixed(1)} fps',
+                        ),
+                        trailing: SizedBox(
+                          width: 120,
+                          child: Slider(
+                            value: settings.colorTransferFrameRate,
+                            min: 1,
+                            max: 10,
+                            divisions: 9,
+                            onChanged: controller.updateColorTransferFrameRate,
+                          ),
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.tune_rounded),
+                        title: const Text('Transport Quality'),
+                        trailing: DropdownButton<String>(
+                          value: settings.colorTransportQuality,
+                          underline: const SizedBox.shrink(),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'fast',
+                              child: Text('Fast'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'balanced',
+                              child: Text('Balanced'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'robust',
+                              child: Text('Robust'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              controller.updateColorTransportQuality(value);
+                            }
+                          },
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      SwitchListTile(
+                        title: const Text('Debug Overlay'),
+                        subtitle: const Text('Show detection diagnostics on camera'),
+                        value: settings.debugOverlay,
+                        onChanged: controller.toggleDebugOverlay,
+                      ),
+                      const Divider(height: 1),
+                      SwitchListTile(
+                        title: const Text('Experimental Features'),
+                        subtitle: const Text('Enable in-development transport options'),
+                        value: settings.experimentalFeatures,
+                        onChanged: controller.toggleExperimentalFeatures,
                       ),
                     ],
                   ),

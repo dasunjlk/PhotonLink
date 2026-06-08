@@ -7,7 +7,7 @@ import '../../protocols/interfaces/transfer_packet.dart';
 import '../core/transfer_limits.dart';
 
 /// QR wire format: PL2|<type>|<sessionId>|<seq>|<total>|<base64Payload>
-class QrFrameCodec implements TransferEncoder, TransferDecoder {
+class QrFrameCodec implements TransferEncoder<String>, TransferDecoder<String> {
   const QrFrameCodec();
 
   static const String magic = 'PL2';
@@ -26,14 +26,7 @@ class QrFrameCodec implements TransferEncoder, TransferDecoder {
   String _encodeFrameUnchecked(TransferPacket packet) {
     switch (packet) {
       case MetadataPacket metadata:
-        final jsonPayload = jsonEncode({
-          'fileName': metadata.fileName,
-          'fileSize': metadata.fileSize,
-          'totalChunks': metadata.totalChunks,
-          'sha256': metadata.sha256,
-          'mimeType': metadata.mimeType,
-        });
-        final b64 = base64Encode(utf8.encode(jsonPayload));
+        final b64 = base64Encode(utf8.encode(jsonEncode(metadata.toJson())));
         return '$magic|M|${metadata.sessionId}|0|${metadata.totalChunks}|$b64';
       case DataPacket data:
         final b64 = base64Encode(data.payload);
@@ -64,28 +57,19 @@ class QrFrameCodec implements TransferEncoder, TransferDecoder {
       if (type == 'M') {
         final jsonMap =
             jsonDecode(utf8.decode(payloadBytes)) as Map<String, dynamic>;
-        final fileName = jsonMap['fileName'] as String? ?? '';
-        final fileSize = jsonMap['fileSize'] as int? ?? -1;
-        final totalChunks = jsonMap['totalChunks'] as int? ?? 0;
-        final sha256 = jsonMap['sha256'] as String? ?? '';
+        final metadata = MetadataPacket.fromJson(sessionId, jsonMap);
         TransferLimits.validateMetadata(
-          fileName: fileName,
-          fileSize: fileSize,
-          totalChunks: totalChunks,
-          sha256: sha256,
+          fileName: metadata.fileName,
+          fileSize: metadata.fileSize,
+          totalChunks: metadata.totalChunks,
+          sha256: metadata.sha256,
         );
-        return MetadataPacket(
-          sessionId: sessionId,
-          fileName: fileName,
-          fileSize: fileSize,
-          totalChunks: totalChunks,
-          sha256: sha256,
-          mimeType:
-              jsonMap['mimeType'] as String? ?? 'application/octet-stream',
-        );
+        return metadata;
       } else if (type == 'D') {
         if (seq < 0 || seq >= total) return null;
-        if (payloadBytes.length > TransferLimits.maxFileBytes) return null;
+        if (payloadBytes.length > TransferLimits.maxColorMatrixFileBytes) {
+          return null;
+        }
         return DataPacket(
           sessionId: sessionId,
           chunkId: seq,

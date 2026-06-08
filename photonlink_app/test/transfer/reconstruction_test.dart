@@ -5,17 +5,21 @@ import 'package:photonlink_app/protocols/interfaces/transfer_packet.dart';
 import 'package:photonlink_app/transfer/core/chunking_engine.dart';
 import 'package:photonlink_app/transfer/core/reconstruction_engine.dart';
 import 'package:photonlink_app/transfer/core/session_factory.dart';
+import 'package:photonlink_app/transfer/qr/qr_transport.dart';
 
 void main() {
-  test('rebuilds file from out-of-order packets', () {
+  test('rebuilds file from out-of-order packets', () async {
     const engine = ChunkingEngine();
     final factory = SessionFactory(chunkManager: engine);
     final bytes = Uint8List.fromList(List.generate(800, (i) => i % 256));
+    const transport = QrTransport();
 
-    final bundle = factory.prepareSenderSession(
+    final bundle = await factory.prepareSenderSession(
       fileBytes: bytes,
       fileName: 'test.bin',
       mimeType: 'application/octet-stream',
+      limits: transport.limits,
+      encoder: transport.encoder,
     );
 
     final recon = ReconstructionEngine(chunkingEngine: engine);
@@ -30,16 +34,19 @@ void main() {
     expect(recon.rebuild(), bytes);
   });
 
-  test('duplicate packets are ignored', () {
+  test('duplicate packets are ignored', () async {
     const engine = ChunkingEngine();
     final factory = SessionFactory(chunkManager: engine);
     final bytes = Uint8List.fromList([1, 2, 3, 4, 5]);
+    const transport = QrTransport();
 
-    final bundle = factory.prepareSenderSession(
+    final bundle = await factory.prepareSenderSession(
       fileBytes: bytes,
       fileName: 'tiny.bin',
       mimeType: 'application/octet-stream',
       chunkSize: 10,
+      limits: transport.limits,
+      encoder: transport.encoder,
     );
 
     final recon = ReconstructionEngine(chunkingEngine: engine);

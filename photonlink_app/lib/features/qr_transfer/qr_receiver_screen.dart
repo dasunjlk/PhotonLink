@@ -37,7 +37,9 @@ class _QrReceiverScreenState extends ConsumerState<QrReceiverScreen> {
     super.initState();
     _initPermission();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(receiverControllerProvider.notifier).startReceiving();
+      ref
+          .read(receiverControllerProvider(TransferMethod.qr).notifier)
+          .startReceiving();
     });
   }
 
@@ -61,7 +63,8 @@ class _QrReceiverScreenState extends ConsumerState<QrReceiverScreen> {
   }
 
   void _onDetect(BarcodeCapture capture) {
-    final receiverState = ref.read(receiverControllerProvider);
+    final receiverState =
+        ref.read(receiverControllerProvider(TransferMethod.qr));
     if (receiverState.phase == TransferPhase.completed ||
         receiverState.phase == TransferPhase.failed ||
         receiverState.phase == TransferPhase.reconstructing) {
@@ -75,7 +78,9 @@ class _QrReceiverScreenState extends ConsumerState<QrReceiverScreen> {
       final raw = barcode.rawValue;
       if (raw == null || raw.isEmpty) continue;
       _lastScan = now;
-      ref.read(receiverControllerProvider.notifier).onFrameScanned(raw);
+      ref
+          .read(receiverControllerProvider(TransferMethod.qr).notifier)
+          .onQrFrameScanned(raw);
       break;
     }
 
@@ -83,7 +88,7 @@ class _QrReceiverScreenState extends ConsumerState<QrReceiverScreen> {
 
   @override
   void dispose() {
-    ref.read(receiverControllerProvider.notifier).reset();
+    ref.read(receiverControllerProvider(TransferMethod.qr).notifier).reset();
     _scannerController.dispose();
     super.dispose();
   }
@@ -92,9 +97,11 @@ class _QrReceiverScreenState extends ConsumerState<QrReceiverScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final accent = TransferMethod.qr.accentColor;
-    final receiverState = ref.watch(receiverControllerProvider);
+    final receiverState =
+        ref.watch(receiverControllerProvider(TransferMethod.qr));
 
-    ref.listen<ReceiverTransferState>(receiverControllerProvider, (prev, next) {
+    ref.listen<ReceiverTransferState>(
+        receiverControllerProvider(TransferMethod.qr), (prev, next) {
       if (prev?.phase != TransferPhase.completed &&
           next.phase == TransferPhase.completed) {
         _scannerController.stop();

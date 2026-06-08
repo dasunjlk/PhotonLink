@@ -11,6 +11,7 @@ class SessionSnapshot {
     this.fileName,
     this.totalChunks,
     this.direction,
+    this.metadataJson,
   });
 
   final String sessionId;
@@ -19,6 +20,7 @@ class SessionSnapshot {
   final String? fileName;
   final int? totalChunks;
   final String? direction;
+  final String? metadataJson;
 
   Map<String, dynamic> toJson() => {
         'sessionId': sessionId,
@@ -27,6 +29,7 @@ class SessionSnapshot {
         if (fileName != null) 'fileName': fileName,
         if (totalChunks != null) 'totalChunks': totalChunks,
         if (direction != null) 'direction': direction,
+        if (metadataJson != null) 'metadataJson': metadataJson,
       };
 
   factory SessionSnapshot.fromJson(Map<String, dynamic> json) {
@@ -40,6 +43,7 @@ class SessionSnapshot {
       fileName: json['fileName'] as String?,
       totalChunks: json['totalChunks'] as int?,
       direction: json['direction'] as String?,
+      metadataJson: json['metadataJson'] as String?,
     );
   }
 }

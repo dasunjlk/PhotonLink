@@ -18,6 +18,14 @@ class SettingsRepository {
     final encryption = _prefs.getBool(AppConstants.prefEncryption);
     final methodId = _prefs.getString(AppConstants.prefPreferredMethod);
     final cameraResolution = _prefs.getString(AppConstants.prefCameraResolution);
+    final colorMatrixSize = _prefs.getInt(AppConstants.prefColorMatrixSize);
+    final colorFrameRate =
+        _prefs.getDouble(AppConstants.prefColorTransferFrameRate);
+    final colorQuality =
+        _prefs.getString(AppConstants.prefColorTransportQuality);
+    final debugOverlay = _prefs.getBool(AppConstants.prefDebugOverlay);
+    final experimental =
+        _prefs.getBool(AppConstants.prefExperimentalFeatures);
 
     return AppSettings(
       themeMode: themeIndex != null
@@ -28,6 +36,11 @@ class SettingsRepository {
       encryptionEnabled: encryption ?? false,
       preferredMethod: _methodFromId(methodId),
       cameraResolution: cameraResolution ?? 'high',
+      colorMatrixSize: _validGridSize(colorMatrixSize),
+      colorTransferFrameRate: colorFrameRate ?? 4.0,
+      colorTransportQuality: colorQuality ?? 'balanced',
+      debugOverlay: debugOverlay ?? false,
+      experimentalFeatures: experimental ?? false,
     );
   }
 
@@ -53,6 +66,26 @@ class SettingsRepository {
       AppConstants.prefCameraResolution,
       settings.cameraResolution,
     );
+    await _prefs.setInt(
+      AppConstants.prefColorMatrixSize,
+      settings.colorMatrixSize,
+    );
+    await _prefs.setDouble(
+      AppConstants.prefColorTransferFrameRate,
+      settings.colorTransferFrameRate,
+    );
+    await _prefs.setString(
+      AppConstants.prefColorTransportQuality,
+      settings.colorTransportQuality,
+    );
+    await _prefs.setBool(
+      AppConstants.prefDebugOverlay,
+      settings.debugOverlay,
+    );
+    await _prefs.setBool(
+      AppConstants.prefExperimentalFeatures,
+      settings.experimentalFeatures,
+    );
   }
 
   TransferMethod _methodFromId(String? id) {
@@ -61,5 +94,11 @@ class SettingsRepository {
       (m) => m.id == id,
       orElse: () => TransferMethod.qr,
     );
+  }
+
+  int _validGridSize(int? size) {
+    if (size == 24) return 24;
+    if (size == 32) return 32;
+    return 16;
   }
 }

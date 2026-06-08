@@ -35,6 +35,31 @@ class SettingsController extends StateNotifier<AppSettings> {
     state = state.copyWith(cameraResolution: resolution);
     await _repository.save(state);
   }
+
+  Future<void> updateColorMatrixSize(int size) async {
+    state = state.copyWith(colorMatrixSize: size);
+    await _repository.save(state);
+  }
+
+  Future<void> updateColorTransferFrameRate(double fps) async {
+    state = state.copyWith(colorTransferFrameRate: fps);
+    await _repository.save(state);
+  }
+
+  Future<void> updateColorTransportQuality(String quality) async {
+    state = state.copyWith(colorTransportQuality: quality);
+    await _repository.save(state);
+  }
+
+  Future<void> toggleDebugOverlay(bool enabled) async {
+    state = state.copyWith(debugOverlay: enabled);
+    await _repository.save(state);
+  }
+
+  Future<void> toggleExperimentalFeatures(bool enabled) async {
+    state = state.copyWith(experimentalFeatures: enabled);
+    await _repository.save(state);
+  }
 }
 
 final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
@@ -45,3 +70,6 @@ final settingsProvider =
     StateNotifierProvider<SettingsController, AppSettings>((ref) {
   return SettingsController(ref.watch(settingsRepositoryProvider));
 });
+
+/// Alias for settings provider.
+final settingsControllerProvider = settingsProvider;
