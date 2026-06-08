@@ -1,10 +1,13 @@
-import 'dart:typed_data';
-
 import '../../protocols/interfaces/compression_type.dart';
+import 'models/compression_result.dart';
 
-/// Compresses and decompresses file payloads before chunking.
+/// Transport-agnostic compression codec.
 abstract interface class CompressionStrategy {
   CompressionType get type;
-  Uint8List compress(Uint8List data);
-  Uint8List decompress(Uint8List data);
+
+  bool get isEnabled;
+
+  CompressionResult compress(List<int> input);
+
+  CompressionResult decompress(List<int> input, {required int originalSize});
 }

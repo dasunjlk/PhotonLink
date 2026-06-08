@@ -1,10 +1,16 @@
-import 'retry_policy.dart';
-
-/// Manages retry attempts for recoverable transfer steps.
+/// Manages per-packet retry counts and failure classification.
 abstract interface class RetryManager {
-  RetryPolicy get policy;
-  bool shouldRetry(String operationKey);
-  void recordAttempt(String operationKey);
-  void reset(String operationKey);
-  int attemptsFor(String operationKey);
+  void reset({required int totalPackets});
+
+  bool canRetry(int packetId);
+
+  void recordRetry(int packetId);
+
+  int retryCountFor(int packetId);
+
+  Set<int> get permanentlyFailedIds;
+
+  int get totalRetries;
+
+  bool get hasPermanentFailures;
 }

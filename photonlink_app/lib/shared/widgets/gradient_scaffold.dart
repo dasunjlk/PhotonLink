@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../ui/colors.dart';
-import '../../ui/spacing.dart';
 
 /// Scaffold with animated gradient background.
 class GradientScaffold extends StatefulWidget {

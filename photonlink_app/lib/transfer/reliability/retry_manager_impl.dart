@@ -1,32 +1,51 @@
 import '../../protocols/interfaces/reliability/retry_manager.dart';
-import '../../protocols/interfaces/reliability/retry_policy.dart';
+import 'models/retry_policy.dart';
 
-/// In-memory retry counter per operation key.
+/// Per-packet retry tracking with permanent failure detection.
 class RetryManagerImpl implements RetryManager {
-  RetryManagerImpl({RetryPolicy? policy})
-      : _policy = policy ?? const RetryPolicy();
+  RetryManagerImpl({RetryPolicy policy = RetryPolicy.defaultPolicy})
+      : _policy = policy;
 
   final RetryPolicy _policy;
-  final Map<String, int> _attempts = {};
+  int _totalPackets = 0;
+  final Map<int, int> _retryCounts = {};
+  final Set<int> _permanentFailures = {};
+  int _totalRetries = 0;
 
   @override
-  RetryPolicy get policy => _policy;
-
-  @override
-  int attemptsFor(String operationKey) => _attempts[operationKey] ?? 0;
-
-  @override
-  void recordAttempt(String operationKey) {
-    _attempts[operationKey] = attemptsFor(operationKey) + 1;
+  void reset({required int totalPackets}) {
+    _totalPackets = totalPackets;
+    _retryCounts.clear();
+    _permanentFailures.clear();
+    _totalRetries = 0;
   }
 
   @override
-  void reset(String operationKey) {
-    _attempts.remove(operationKey);
+  bool canRetry(int packetId) {
+    if (packetId < 0 || packetId >= _totalPackets) return false;
+    if (_permanentFailures.contains(packetId)) return false;
+    return (_retryCounts[packetId] ?? 0) < _policy.maxRetries;
   }
 
   @override
-  bool shouldRetry(String operationKey) {
-    return attemptsFor(operationKey) < _policy.maxAttempts;
+  void recordRetry(int packetId) {
+    final count = (_retryCounts[packetId] ?? 0) + 1;
+    _retryCounts[packetId] = count;
+    _totalRetries++;
+    if (count >= _policy.maxRetries) {
+      _permanentFailures.add(packetId);
+    }
   }
+
+  @override
+  int retryCountFor(int packetId) => _retryCounts[packetId] ?? 0;
+
+  @override
+  Set<int> get permanentlyFailedIds => Set.unmodifiable(_permanentFailures);
+
+  @override
+  int get totalRetries => _totalRetries;
+
+  @override
+  bool get hasPermanentFailures => _permanentFailures.isNotEmpty;
 }

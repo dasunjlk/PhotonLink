@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import '../../protocols/interfaces/chunk_manager.dart';
+import '../../protocols/interfaces/transfer_decoder.dart';
 import '../../protocols/interfaces/transfer_encoder.dart';
 import '../../protocols/interfaces/transport.dart';
 import '../../protocols/interfaces/transport_limits_resolver.dart';
@@ -25,10 +26,10 @@ class QrTransport implements Transport<String> {
   TransferMethod get method => TransferMethod.qr;
 
   @override
-  QrFrameCodec get encoder => _codec;
+  TransferEncoder<String> get encoder => _codec;
 
   @override
-  QrFrameCodec get decoder => _codec;
+  TransferDecoder<String> get decoder => _codec;
 
   @override
   QrTransferLimitsResolver get limits => _limits;

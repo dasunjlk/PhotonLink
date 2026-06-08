@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import '../../protocols/interfaces/compression_type.dart';
+import '../../protocols/interfaces/encryption_mode.dart';
 import '../../protocols/interfaces/transfer_decoder.dart';
 import '../../protocols/interfaces/transfer_encoder.dart';
 import '../../protocols/interfaces/transfer_packet.dart';
@@ -28,6 +30,12 @@ class ColorMatrixFrameCodec
   final ColorDecoder _decoder;
   int _frameCounter = 0;
 
+  /// Embedded in metadata JSON when encryption is enabled (Color Matrix has no setup QR).
+  String? encoderKeyExchangePayload;
+
+  /// Populated after decoding a metadata frame that carries a session key.
+  String? lastDecodedKeyExchange;
+
   int get maxPayloadBytes => _maxPayloadForGrid(gridSize, bitsPerChannel);
 
   void resetFrameCounter() => _frameCounter = 0;
@@ -45,12 +53,23 @@ class ColorMatrixFrameCodec
         isMetadata = true;
         packetId = 0;
         totalPackets = metadata.totalChunks;
-        payload = Uint8List.fromList(utf8.encode(jsonEncode(metadata.toJson())));
+        payload = Uint8List.fromList(
+          utf8.encode(
+            jsonEncode(
+              _metadataToJson(
+                metadata,
+                keyExchangePayload: encoderKeyExchangePayload,
+              ),
+            ),
+          ),
+        );
       case DataPacket data:
         isMetadata = false;
         packetId = data.chunkId;
         totalPackets = data.totalChunks;
         payload = data.payload;
+      default:
+        throw StateError('Unsupported packet type for Color Matrix: $packet');
     }
 
     final serialized = ColorMatrixSerializer.serialize(
@@ -119,7 +138,8 @@ class ColorMatrixFrameCodec
       try {
         final jsonStr = utf8.decode(frame.payload);
         final map = jsonDecode(jsonStr) as Map<String, dynamic>;
-        return MetadataPacket.fromJson(frame.sessionId, map);
+        lastDecodedKeyExchange = map['keyExchangePayload'] as String?;
+        return _metadataFromJson(frame.sessionId, map);
       } catch (_) {
         return null;
       }
@@ -139,5 +159,50 @@ class ColorMatrixFrameCodec
     final bitsPerCell = bitsPerChannel * 3;
     final totalBits = gridSize * gridSize * bitsPerCell;
     return totalBits ~/ 8;
+  }
+
+  static Map<String, dynamic> _metadataToJson(
+    MetadataPacket metadata, {
+    String? keyExchangePayload,
+  }) {
+    return {
+      'fileName': metadata.fileName,
+      'fileSize': metadata.fileSize,
+      'totalChunks': metadata.totalChunks,
+      'sha256': metadata.sha256,
+      'mimeType': metadata.mimeType,
+      'protocolVersion': metadata.protocolVersion,
+      'compression': metadata.compression.name,
+      'encryption': metadata.encryption.name,
+      if (metadata.originalSize != null) 'originalSize': metadata.originalSize,
+      if (metadata.originalSha256 != null)
+        'originalSha256': metadata.originalSha256,
+      if (keyExchangePayload != null) 'keyExchangePayload': keyExchangePayload,
+    };
+  }
+
+  static MetadataPacket _metadataFromJson(
+    String sessionId,
+    Map<String, dynamic> json,
+  ) {
+    return MetadataPacket(
+      sessionId: sessionId,
+      fileName: json['fileName'] as String? ?? 'unknown',
+      fileSize: json['fileSize'] as int? ?? 0,
+      totalChunks: json['totalChunks'] as int? ?? 0,
+      sha256: json['sha256'] as String? ?? '',
+      mimeType: json['mimeType'] as String? ?? 'application/octet-stream',
+      protocolVersion: json['protocolVersion'] as int? ?? 1,
+      compression: CompressionType.values.firstWhere(
+        (v) => v.name == json['compression'],
+        orElse: () => CompressionType.none,
+      ),
+      encryption: EncryptionMode.values.firstWhere(
+        (v) => v.name == json['encryption'],
+        orElse: () => EncryptionMode.disabled,
+      ),
+      originalSize: json['originalSize'] as int?,
+      originalSha256: json['originalSha256'] as String?,
+    );
   }
 }

@@ -3,63 +3,32 @@ import 'dart:typed_data';
 import '../../protocols/interfaces/encryption_mode.dart';
 import 'chacha20_encryption_strategy.dart';
 import 'encryption_strategy.dart';
-import 'no_encryption_strategy.dart';
+import 'models/encrypted_payload.dart';
 
-/// Selects and applies encryption strategies.
+/// Applies optional ChaCha20-Poly1305 encryption (transport-agnostic).
 class EncryptionManager {
-  EncryptionManager({
-    NoEncryptionStrategy? none,
-    ChaCha20EncryptionStrategy? chacha20,
-  })  : _none = none ?? const NoEncryptionStrategy(),
-        _chacha20 = chacha20 ?? ChaCha20EncryptionStrategy();
+  EncryptionManager({EncryptionStrategy? enabled})
+      : _enabled = enabled ?? ChaCha20EncryptionStrategy();
 
-  final NoEncryptionStrategy _none;
-  final ChaCha20EncryptionStrategy _chacha20;
+  final EncryptionStrategy _enabled;
 
-  EncryptionStrategy strategyFor(EncryptionMode mode) {
-    switch (mode) {
-      case EncryptionMode.none:
-        return _none;
-      case EncryptionMode.chacha20Poly1305:
-        return _chacha20;
-    }
-  }
-
-  Future<EncryptedPayload> encrypt({
-    required EncryptionMode mode,
+  Future<Uint8List> encryptIfEnabled({
     required Uint8List plaintext,
-    required String passphrase,
-    Uint8List? salt,
+    required Uint8List sessionKey,
+    required EncryptionMode mode,
   }) async {
-    switch (mode) {
-      case EncryptionMode.none:
-        return _none.encrypt(
-          plaintext: plaintext,
-          passphrase: passphrase,
-          salt: salt,
-        );
-      case EncryptionMode.chacha20Poly1305:
-        return _chacha20.encryptAsync(
-          plaintext: plaintext,
-          passphrase: passphrase,
-          salt: salt,
-        );
-    }
+    if (mode == EncryptionMode.disabled) return plaintext;
+    final enc = await _enabled.encrypt(plaintext, sessionKey);
+    return enc.toWireBytes();
   }
 
-  Future<Uint8List> decrypt({
+  Future<Uint8List> decryptIfEnabled({
+    required Uint8List wireBytes,
+    required Uint8List sessionKey,
     required EncryptionMode mode,
-    required EncryptedPayload payload,
-    required String passphrase,
   }) async {
-    switch (mode) {
-      case EncryptionMode.none:
-        return _none.decrypt(payload: payload, passphrase: passphrase);
-      case EncryptionMode.chacha20Poly1305:
-        return _chacha20.decryptAsync(
-          payload: payload,
-          passphrase: passphrase,
-        );
-    }
+    if (mode == EncryptionMode.disabled) return wireBytes;
+    final payload = EncryptedPayload.fromWireBytes(wireBytes);
+    return _enabled.decrypt(payload, sessionKey);
   }
 }

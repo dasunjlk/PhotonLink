@@ -1,7 +1,8 @@
-/// Supported payload compression algorithms.
+/// Compression algorithm identifier (transport-agnostic).
 enum CompressionType {
   none('none'),
-  gzip('gzip');
+  gzip('gzip'),
+  lz4('lz4');
 
   const CompressionType(this.id);
   final String id;

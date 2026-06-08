@@ -1,16 +1,16 @@
-/// Supported payload encryption modes.
+/// Encryption mode identifier (transport-agnostic).
 enum EncryptionMode {
-  none('none'),
-  chacha20Poly1305('chacha20_poly1305');
+  disabled('disabled'),
+  enabled('enabled');
 
   const EncryptionMode(this.id);
   final String id;
 
   static EncryptionMode fromId(String? id) {
-    if (id == null) return EncryptionMode.none;
+    if (id == null) return EncryptionMode.disabled;
     return EncryptionMode.values.firstWhere(
-      (m) => m.id == id,
-      orElse: () => EncryptionMode.none,
+      (t) => t.id == id,
+      orElse: () => EncryptionMode.disabled,
     );
   }
 }

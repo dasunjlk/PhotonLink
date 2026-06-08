@@ -1,91 +1,101 @@
-import 'dart:typed_data';
-
-import '../../protocols/interfaces/reliability/transfer_diagnostics.dart';
+import '../../protocols/interfaces/compression_type.dart';
+import '../../protocols/interfaces/encryption_mode.dart';
 import '../../protocols/interfaces/transfer_session.dart';
-import '../../protocols/transfer_method.dart';
+import '../reliability/models/transfer_diagnostics.dart';
+import '../state/transfer_phase.dart';
 
-/// High-level transfer phase for UI and controllers.
-enum TransferPhase {
-  idle,
-  preparing,
-  transmitting,
-  receiving,
-  reconstructing,
-  completed,
-  failed,
-}
+export '../state/transfer_phase.dart';
 
-/// Sender-side state.
+/// Sender-side state with Phase 3/4 diagnostics.
 class SenderTransferState {
   const SenderTransferState({
     this.phase = TransferPhase.idle,
-    this.method = TransferMethod.qr,
     this.session,
     this.currentFrameIndex = 0,
     this.totalFrames = 0,
     this.loopCount = 0,
     this.framesPerSecond = 2.0,
-    this.currentQrFrame,
-    this.currentColorMatrixRaster,
+    this.currentFrameData,
     this.errorMessage,
     this.filePath,
     this.historyRecordId,
     this.diagnostics = const TransferDiagnostics(),
+    this.missingCount = 0,
+    this.roundNumber = 0,
+    this.resumableSession,
+    this.compression = CompressionType.none,
+    this.encryption = EncryptionMode.disabled,
+    this.compressionRatio = 1.0,
+    this.compressionSavingsBytes = 0,
   });
 
   final TransferPhase phase;
-  final TransferMethod method;
   final TransferSession? session;
   final int currentFrameIndex;
   final int totalFrames;
   final int loopCount;
   final double framesPerSecond;
-  final String? currentQrFrame;
-  final Uint8List? currentColorMatrixRaster;
+  final String? currentFrameData;
   final String? errorMessage;
   final String? filePath;
   final String? historyRecordId;
   final TransferDiagnostics diagnostics;
+  final int missingCount;
+  final int roundNumber;
+  final String? resumableSession;
+  final CompressionType compression;
+  final EncryptionMode encryption;
+  final double compressionRatio;
+  final int compressionSavingsBytes;
 
   SenderTransferState copyWith({
     TransferPhase? phase,
-    TransferMethod? method,
     TransferSession? session,
     int? currentFrameIndex,
     int? totalFrames,
     int? loopCount,
     double? framesPerSecond,
-    String? currentQrFrame,
-    Uint8List? currentColorMatrixRaster,
+    String? currentFrameData,
     String? errorMessage,
     String? filePath,
     String? historyRecordId,
     TransferDiagnostics? diagnostics,
+    int? missingCount,
+    int? roundNumber,
+    String? resumableSession,
+    CompressionType? compression,
+    EncryptionMode? encryption,
+    double? compressionRatio,
+    int? compressionSavingsBytes,
   }) {
     return SenderTransferState(
       phase: phase ?? this.phase,
-      method: method ?? this.method,
       session: session ?? this.session,
       currentFrameIndex: currentFrameIndex ?? this.currentFrameIndex,
       totalFrames: totalFrames ?? this.totalFrames,
       loopCount: loopCount ?? this.loopCount,
       framesPerSecond: framesPerSecond ?? this.framesPerSecond,
-      currentQrFrame: currentQrFrame ?? this.currentQrFrame,
-      currentColorMatrixRaster:
-          currentColorMatrixRaster ?? this.currentColorMatrixRaster,
+      currentFrameData: currentFrameData ?? this.currentFrameData,
       errorMessage: errorMessage ?? this.errorMessage,
       filePath: filePath ?? this.filePath,
       historyRecordId: historyRecordId ?? this.historyRecordId,
       diagnostics: diagnostics ?? this.diagnostics,
+      missingCount: missingCount ?? this.missingCount,
+      roundNumber: roundNumber ?? this.roundNumber,
+      resumableSession: resumableSession ?? this.resumableSession,
+      compression: compression ?? this.compression,
+      encryption: encryption ?? this.encryption,
+      compressionRatio: compressionRatio ?? this.compressionRatio,
+      compressionSavingsBytes:
+          compressionSavingsBytes ?? this.compressionSavingsBytes,
     );
   }
 }
 
-/// Receiver-side state.
+/// Receiver-side state with Phase 3/4 diagnostics.
 class ReceiverTransferState {
   const ReceiverTransferState({
     this.phase = TransferPhase.idle,
-    this.method = TransferMethod.qr,
     this.session,
     this.receivedChunks = 0,
     this.totalChunks = 0,
@@ -95,12 +105,18 @@ class ReceiverTransferState {
     this.errorMessage,
     this.duplicatesIgnored = 0,
     this.diagnostics = const TransferDiagnostics(),
-    this.detectionAccuracy = 0.0,
-    this.missingChunks = 0,
+    this.missingCount = 0,
+    this.roundNumber = 0,
+    this.resumableSession,
+    this.statusMessage,
+    this.currentFrameData,
+    this.compression = CompressionType.none,
+    this.encryption = EncryptionMode.disabled,
+    this.compressionRatio = 1.0,
+    this.compressionSavingsBytes = 0,
   });
 
   final TransferPhase phase;
-  final TransferMethod method;
   final TransferSession? session;
   final int receivedChunks;
   final int totalChunks;
@@ -110,12 +126,18 @@ class ReceiverTransferState {
   final String? errorMessage;
   final int duplicatesIgnored;
   final TransferDiagnostics diagnostics;
-  final double detectionAccuracy;
-  final int missingChunks;
+  final int missingCount;
+  final int roundNumber;
+  final String? resumableSession;
+  final String? statusMessage;
+  final String? currentFrameData;
+  final CompressionType compression;
+  final EncryptionMode encryption;
+  final double compressionRatio;
+  final int compressionSavingsBytes;
 
   ReceiverTransferState copyWith({
     TransferPhase? phase,
-    TransferMethod? method,
     TransferSession? session,
     int? receivedChunks,
     int? totalChunks,
@@ -125,12 +147,18 @@ class ReceiverTransferState {
     String? errorMessage,
     int? duplicatesIgnored,
     TransferDiagnostics? diagnostics,
-    double? detectionAccuracy,
-    int? missingChunks,
+    int? missingCount,
+    int? roundNumber,
+    String? resumableSession,
+    String? statusMessage,
+    String? currentFrameData,
+    CompressionType? compression,
+    EncryptionMode? encryption,
+    double? compressionRatio,
+    int? compressionSavingsBytes,
   }) {
     return ReceiverTransferState(
       phase: phase ?? this.phase,
-      method: method ?? this.method,
       session: session ?? this.session,
       receivedChunks: receivedChunks ?? this.receivedChunks,
       totalChunks: totalChunks ?? this.totalChunks,
@@ -140,8 +168,16 @@ class ReceiverTransferState {
       errorMessage: errorMessage ?? this.errorMessage,
       duplicatesIgnored: duplicatesIgnored ?? this.duplicatesIgnored,
       diagnostics: diagnostics ?? this.diagnostics,
-      detectionAccuracy: detectionAccuracy ?? this.detectionAccuracy,
-      missingChunks: missingChunks ?? this.missingChunks,
+      missingCount: missingCount ?? this.missingCount,
+      roundNumber: roundNumber ?? this.roundNumber,
+      resumableSession: resumableSession ?? this.resumableSession,
+      statusMessage: statusMessage ?? this.statusMessage,
+      currentFrameData: currentFrameData ?? this.currentFrameData,
+      compression: compression ?? this.compression,
+      encryption: encryption ?? this.encryption,
+      compressionRatio: compressionRatio ?? this.compressionRatio,
+      compressionSavingsBytes:
+          compressionSavingsBytes ?? this.compressionSavingsBytes,
     );
   }
 }

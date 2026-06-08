@@ -1,30 +1,16 @@
 import 'dart:typed_data';
 
 import '../../protocols/interfaces/encryption_mode.dart';
+import 'models/encrypted_payload.dart';
 
-/// Result of encrypting a payload.
-class EncryptedPayload {
-  const EncryptedPayload({
-    required this.ciphertext,
-    required this.nonce,
-    required this.salt,
-  });
-
-  final Uint8List ciphertext;
-  final Uint8List nonce;
-  final Uint8List salt;
-}
-
-/// Encrypts and decrypts file payloads before chunking.
+/// Transport-agnostic encryption codec.
 abstract interface class EncryptionStrategy {
   EncryptionMode get mode;
-  EncryptedPayload encrypt({
-    required Uint8List plaintext,
-    required String passphrase,
-    Uint8List? salt,
-  });
-  Uint8List decrypt({
-    required EncryptedPayload payload,
-    required String passphrase,
-  });
+
+  Future<EncryptedPayload> encrypt(Uint8List plaintext, Uint8List sessionKey);
+
+  Future<Uint8List> decrypt(
+    EncryptedPayload payload,
+    Uint8List sessionKey,
+  );
 }

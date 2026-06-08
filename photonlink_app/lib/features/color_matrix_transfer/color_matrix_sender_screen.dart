@@ -7,8 +7,8 @@ import '../../shared/widgets/animated_pill_button.dart';
 import '../../shared/widgets/glass_card.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
 import '../../shared/widgets/staggered_reveal.dart';
+import '../../transfer/application/color_matrix_transfer_state.dart';
 import '../../transfer/application/transfer_providers.dart';
-import '../../transfer/application/transfer_state.dart';
 import '../../ui/spacing.dart';
 import '../qr_transfer/widgets/transfer_progress_bar.dart';
 import 'widgets/color_matrix_frame_display.dart';
@@ -57,7 +57,7 @@ class _ColorMatrixSenderScreenState
         return;
       }
 
-      ref.read(senderControllerProvider(_method).notifier).reset();
+      ref.read(colorMatrixSenderControllerProvider.notifier).reset();
       setState(() {
         _selectedFile = file;
         _isPicking = false;
@@ -74,14 +74,14 @@ class _ColorMatrixSenderScreenState
     final file = _selectedFile;
     if (file?.path == null) return;
 
-    final notifier = ref.read(senderControllerProvider(_method).notifier);
+    final notifier = ref.read(colorMatrixSenderControllerProvider.notifier);
     await notifier.prepareTransfer(
       filePath: file!.path!,
       fileName: file.name,
       extension: file.extension,
     );
 
-    final state = ref.read(senderControllerProvider(_method));
+    final state = ref.read(colorMatrixSenderControllerProvider);
     if (state.phase == TransferPhase.failed) return;
 
     await notifier.startTransmission();
@@ -96,7 +96,7 @@ class _ColorMatrixSenderScreenState
 
   @override
   void dispose() {
-    ref.read(senderControllerProvider(_method).notifier).reset();
+    ref.read(colorMatrixSenderControllerProvider.notifier).reset();
     super.dispose();
   }
 
@@ -104,7 +104,7 @@ class _ColorMatrixSenderScreenState
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final accent = _method.accentColor;
-    final senderState = ref.watch(senderControllerProvider(_method));
+    final senderState = ref.watch(colorMatrixSenderControllerProvider);
     final isTransmitting = senderState.phase == TransferPhase.transmitting;
     final isPreparing = senderState.phase == TransferPhase.preparing;
     final session = senderState.session;
@@ -148,7 +148,7 @@ class _ColorMatrixSenderScreenState
                         label:
                             '${senderState.framesPerSecond.toStringAsFixed(1)} fps',
                         onChanged: (v) => ref
-                            .read(senderControllerProvider(_method).notifier)
+                            .read(colorMatrixSenderControllerProvider.notifier)
                             .setFrameRate(v),
                       ),
                     ),
@@ -163,7 +163,7 @@ class _ColorMatrixSenderScreenState
                   color: theme.colorScheme.error,
                   onPressed: () {
                     ref
-                        .read(senderControllerProvider(_method).notifier)
+                        .read(colorMatrixSenderControllerProvider.notifier)
                         .stopTransmission();
                   },
                 ),
@@ -262,7 +262,7 @@ class _ColorMatrixSenderScreenState
   Widget _statsCard(
     ThemeData theme,
     dynamic diag,
-    SenderTransferState senderState,
+    ColorMatrixSenderState senderState,
   ) {
     return GlassCard(
       child: Column(

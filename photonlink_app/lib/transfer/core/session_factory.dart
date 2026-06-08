@@ -1,16 +1,16 @@
 import 'dart:math';
 import 'dart:typed_data';
 
+import '../../core/constants.dart';
 import '../../protocols/interfaces/chunk_manager.dart';
 import '../../protocols/interfaces/compression_type.dart';
 import '../../protocols/interfaces/encryption_mode.dart';
-import '../../protocols/interfaces/transfer_encoder.dart';
 import '../../protocols/interfaces/transfer_packet.dart';
 import '../../protocols/interfaces/transfer_session.dart';
-import '../../protocols/interfaces/transport_limits_resolver.dart';
+import '../qr/qr_frame_codec.dart';
+import '../qr/qr_transfer_limits.dart';
 import 'chunking_engine.dart';
 import 'integrity_verifier.dart';
-import 'payload_pipeline.dart';
 import 'transfer_limits.dart';
 
 /// Creates transfer sessions with metadata and chunked packets.
@@ -18,14 +18,11 @@ class SessionFactory {
   SessionFactory({
     ChunkManager? chunkManager,
     IntegrityVerifier? integrityVerifier,
-    PayloadPipeline? payloadPipeline,
   })  : _chunkManager = chunkManager ?? const ChunkingEngine(),
-        _integrityVerifier = integrityVerifier ?? const IntegrityVerifier(),
-        _payloadPipeline = payloadPipeline ?? PayloadPipeline();
+        _integrityVerifier = integrityVerifier ?? const IntegrityVerifier();
 
   final ChunkManager _chunkManager;
   final IntegrityVerifier _integrityVerifier;
-  final PayloadPipeline _payloadPipeline;
   final _random = Random();
 
   String generateSessionId() {
@@ -34,62 +31,74 @@ class SessionFactory {
     return 'pl-${timestamp.toRadixString(36)}-${nonce.toRadixString(36)}';
   }
 
-  /// Prepares a full sender session: metadata + data packets.
-  Future<SenderSessionBundle> prepareSenderSession({
+  /// Prepares sender session from raw file bytes (no compress/encrypt).
+  SenderSessionBundle prepareSenderSessionFromFile({
     required Uint8List fileBytes,
     required String fileName,
     required String mimeType,
-    required TransportLimitsResolver limits,
-    required TransferEncoder encoder,
     int? chunkSize,
-    bool compressionEnabled = false,
-    bool encryptionEnabled = false,
-    String passphrase = '',
-  }) async {
-    _validateFileSize(fileBytes.length, limits.maxFileBytes);
-
-    final sessionId = generateSessionId();
-    final originalSha256 = _integrityVerifier.compute(fileBytes);
-
-    final transformed = await _payloadPipeline.forward(
-      plaintext: fileBytes,
-      compressionEnabled: compressionEnabled,
-      encryptionEnabled: encryptionEnabled,
-      passphrase: passphrase,
+  }) {
+    final sha256 = _integrityVerifier.compute(fileBytes);
+    return prepareSenderSession(
+      wireBytes: fileBytes,
+      fileName: fileName,
+      mimeType: mimeType,
+      wireSha256: sha256,
+      originalSize: fileBytes.length,
+      originalSha256: sha256,
+      chunkSize: chunkSize,
     );
+  }
+
+  /// Prepares sender session from wire bytes (post compress/encrypt).
+  SenderSessionBundle prepareSenderSession({
+    required Uint8List wireBytes,
+    required String fileName,
+    required String mimeType,
+    required String wireSha256,
+    required int originalSize,
+    required String originalSha256,
+    CompressionType compression = CompressionType.none,
+    EncryptionMode encryption = EncryptionMode.disabled,
+    int? chunkSize,
+    String? sessionIdOverride,
+    bool skipQrFrameValidation = false,
+  }) {
+    TransferLimits.validateFileSize(wireBytes.length);
+
+    final sessionId = sessionIdOverride ?? generateSessionId();
 
     final resolvedChunkSize = chunkSize ??
-        limits.resolveChunkSize(
+        QrTransferLimits.resolveChunkSize(
           sessionId: sessionId,
-          fileBytes: transformed.bytes,
+          fileBytes: wireBytes,
           chunkManager: _chunkManager,
-          encoder: encoder,
         );
 
     final dataPackets = _chunkManager.split(
-      data: transformed.bytes,
+      data: wireBytes,
       sessionId: sessionId,
       chunkSize: resolvedChunkSize,
     );
 
     if (dataPackets.length > TransferLimits.maxTotalChunks) {
       throw TransferLimitException(
-        'Too many chunks (${dataPackets.length}); file is too large for ${limits.transportLabel}',
+        'Too many chunks (${dataPackets.length}); file is too large for QR transfer',
       );
     }
 
     final metadata = MetadataPacket(
       sessionId: sessionId,
       fileName: fileName,
-      fileSize: fileBytes.length,
+      fileSize: wireBytes.length,
       totalChunks: dataPackets.length,
-      sha256: originalSha256,
+      sha256: wireSha256,
       mimeType: mimeType,
-      compression: transformed.compression,
-      encryption: transformed.encryption,
-      transformedSize: transformed.bytes.length,
-      kdfSalt: transformed.kdfSalt,
-      encryptionNonce: transformed.encryptionNonce,
+      protocolVersion: AppConstants.protocolVersion,
+      compression: compression,
+      encryption: encryption,
+      originalSize: originalSize,
+      originalSha256: originalSha256,
     );
 
     TransferLimits.validateMetadata(
@@ -99,21 +108,24 @@ class SessionFactory {
       sha256: metadata.sha256,
     );
 
-    if (!limits.allFramesFit(
-      sessionId: sessionId,
-      metadata: metadata,
-      dataPackets: dataPackets,
-      encoder: encoder,
-    )) {
-      throw TransferLimitException(
-        'Encoded frames exceed safe size limit for ${limits.transportLabel}',
-      );
+    if (!skipQrFrameValidation) {
+      const codec = QrFrameCodec();
+      if (!QrTransferLimits.allDataFramesFit(
+        sessionId,
+        metadata,
+        dataPackets,
+        codec,
+      )) {
+        throw TransferLimitException(
+          'Encoded QR frames exceed safe size limit',
+        );
+      }
     }
 
     final session = TransferSession(
       id: sessionId,
       fileName: fileName,
-      fileSize: fileBytes.length,
+      fileSize: originalSize,
       totalChunks: dataPackets.length,
       sha256: originalSha256,
       mimeType: mimeType,
@@ -125,44 +137,22 @@ class SessionFactory {
       session: session,
       metadata: metadata,
       dataPackets: dataPackets,
-      compression: transformed.compression,
-      encryption: transformed.encryption,
-      kdfSalt: transformed.kdfSalt,
-      encryptionNonce: transformed.encryptionNonce,
     );
-  }
-
-  void _validateFileSize(int sizeBytes, int maxBytes) {
-    if (sizeBytes < 0) {
-      throw TransferLimitException('Invalid file size');
-    }
-    if (sizeBytes > maxBytes) {
-      throw TransferLimitException(
-        'File exceeds ${maxBytes ~/ 1024} KB limit',
-      );
-    }
   }
 }
 
-/// Bundle returned when preparing a sender session.
 class SenderSessionBundle {
   const SenderSessionBundle({
     required this.session,
     required this.metadata,
     required this.dataPackets,
-    this.compression = CompressionType.none,
-    this.encryption = EncryptionMode.none,
-    this.kdfSalt,
-    this.encryptionNonce,
+    this.setupPacket,
   });
 
   final TransferSession session;
   final MetadataPacket metadata;
   final List<DataPacket> dataPackets;
-  final CompressionType compression;
-  final EncryptionMode encryption;
-  final Uint8List? kdfSalt;
-  final Uint8List? encryptionNonce;
+  final SessionSetupPacket? setupPacket;
 
   List<TransferPacket> get allPackets => [metadata, ...dataPackets];
 }

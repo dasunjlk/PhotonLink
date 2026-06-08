@@ -13,6 +13,7 @@ import '../../features/qr_transfer/qr_completion_screen.dart';
 import '../../features/qr_transfer/qr_receiver_screen.dart';
 import '../../features/qr_transfer/qr_sender_screen.dart';
 import '../../features/transfer_setup/transfer_setup_screen.dart';
+import '../../transfer/application/color_matrix_transfer_state.dart';
 import '../../transfer/application/transfer_state.dart';
 import '../../history/presentation/history_screen.dart';
 import '../../protocols/transfer_method.dart';
@@ -128,9 +129,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.colorMatrixComplete,
         name: 'colorMatrixComplete',
         builder: (context, state) {
-          final receiverState = state.extra as ReceiverTransferState?;
+          final receiverState = state.extra as ColorMatrixReceiverState?;
           return ColorMatrixCompletionScreen(
-            state: receiverState ?? const ReceiverTransferState(),
+            state: receiverState ?? const ColorMatrixReceiverState(),
           );
         },
       ),

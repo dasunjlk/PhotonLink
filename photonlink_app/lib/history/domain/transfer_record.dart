@@ -30,6 +30,15 @@ class TransferRecord {
     required this.status,
     required this.timestamp,
     required this.direction,
+    this.sessionId,
+    this.durationMs = 0,
+    this.retryCount = 0,
+    this.failureReason,
+    this.compressionUsed = false,
+    this.encryptionUsed = false,
+    this.compressionRatio,
+    this.transferSpeedBytesPerSec,
+    this.protocolVersion = 1,
   });
 
   final String id;
@@ -39,4 +48,13 @@ class TransferRecord {
   final TransferStatus status;
   final DateTime timestamp;
   final TransferDirection direction;
+  final String? sessionId;
+  final int durationMs;
+  final int retryCount;
+  final String? failureReason;
+  final bool compressionUsed;
+  final bool encryptionUsed;
+  final double? compressionRatio;
+  final double? transferSpeedBytesPerSec;
+  final int protocolVersion;
 }

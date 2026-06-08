@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../shared/widgets/animated_pill_button.dart';
 import '../../shared/widgets/glass_card.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
-import '../../transfer/application/transfer_state.dart';
+import '../../transfer/application/color_matrix_transfer_state.dart';
 import '../../ui/spacing.dart';
 
 /// Completion screen for Color Matrix transfers.
@@ -14,7 +14,7 @@ class ColorMatrixCompletionScreen extends StatelessWidget {
     super.key,
   });
 
-  final ReceiverTransferState state;
+  final ColorMatrixReceiverState state;
 
   @override
   Widget build(BuildContext context) {

@@ -11,11 +11,10 @@ import '../../services/permissions/permission_service.dart';
 import '../../settings/application/settings_controller.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
 import '../../shared/widgets/scan_frame_overlay.dart';
+import '../../transfer/application/color_matrix_transfer_state.dart';
 import '../../transfer/application/transfer_providers.dart';
-import '../../transfer/application/transfer_state.dart';
 import '../../transfer/color_matrix/color_frame_detector.dart';
 import '../../transfer/color_matrix/color_matrix_frame.dart';
-import '../../transfer/color_matrix/color_matrix_frame_codec.dart';
 import '../../ui/spacing.dart';
 import '../qr_transfer/widgets/transfer_progress_bar.dart';
 
@@ -46,7 +45,7 @@ class _ColorMatrixReceiverScreenState
     super.initState();
     _initPermission();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(receiverControllerProvider(_method).notifier).startReceiving();
+      ref.read(colorMatrixReceiverControllerProvider.notifier).startReceiving();
     });
   }
 
@@ -103,7 +102,7 @@ class _ColorMatrixReceiverScreenState
 
   Future<void> _onImageStream(CameraImage image) async {
     if (_isProcessing) return;
-    final receiverState = ref.read(receiverControllerProvider(_method));
+    final receiverState = ref.read(colorMatrixReceiverControllerProvider);
     if (receiverState.phase == TransferPhase.completed ||
         receiverState.phase == TransferPhase.failed ||
         receiverState.phase == TransferPhase.reconstructing) {
@@ -140,7 +139,7 @@ class _ColorMatrixReceiverScreenState
         cells: detection.cells,
       );
 
-      ref.read(receiverControllerProvider(_method).notifier).onColorMatrixFrame(
+      ref.read(colorMatrixReceiverControllerProvider.notifier).onColorMatrixFrame(
             frame,
             detectionAccuracy: detection.accuracy,
           );
@@ -185,7 +184,7 @@ class _ColorMatrixReceiverScreenState
 
   @override
   void dispose() {
-    ref.read(receiverControllerProvider(_method).notifier).reset();
+    ref.read(colorMatrixReceiverControllerProvider.notifier).reset();
     _cameraController?.stopImageStream();
     _cameraController?.dispose();
     super.dispose();
@@ -195,10 +194,10 @@ class _ColorMatrixReceiverScreenState
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final accent = _method.accentColor;
-    final receiverState = ref.watch(receiverControllerProvider(_method));
+    final receiverState = ref.watch(colorMatrixReceiverControllerProvider);
 
-    ref.listen<ReceiverTransferState>(
-      receiverControllerProvider(_method),
+    ref.listen<ColorMatrixReceiverState>(
+      colorMatrixReceiverControllerProvider,
       (prev, next) {
         if (prev?.phase != TransferPhase.completed &&
             next.phase == TransferPhase.completed) {
@@ -265,7 +264,7 @@ class _ProgressPanel extends StatelessWidget {
     required this.theme,
   });
 
-  final ReceiverTransferState receiverState;
+  final ColorMatrixReceiverState receiverState;
   final Color accent;
   final ThemeData theme;
 

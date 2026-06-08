@@ -7,6 +7,7 @@ import '../../shared/widgets/gradient_scaffold.dart';
 import '../../shared/widgets/section_header.dart';
 import '../../shared/widgets/staggered_reveal.dart';
 import '../../ui/spacing.dart';
+import '../../transfer/scheduler/transfer_mode.dart';
 import '../application/settings_controller.dart';
 
 /// Settings screen with theme, transfer, and camera preference placeholders.
@@ -58,9 +59,9 @@ class SettingsScreen extends ConsumerWidget {
                   child: Column(
                     children: [
                       SwitchListTile(
-                        title: const Text('Compression'),
+                        title: const Text('Compression (GZip)'),
                         subtitle: const Text(
-                          'Compress files before transmission (gzip)',
+                          'Compress before packetization (LZ4 placeholder disabled)',
                         ),
                         value: settings.compressionEnabled,
                         onChanged: controller.toggleCompression,
@@ -69,100 +70,37 @@ class SettingsScreen extends ConsumerWidget {
                       SwitchListTile(
                         title: const Text('Encryption'),
                         subtitle: const Text(
-                          'Encrypt data with ChaCha20-Poly1305',
+                          'ChaCha20-Poly1305 — session key in setup QR',
                         ),
                         value: settings.encryptionEnabled,
                         onChanged: controller.toggleEncryption,
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                const SectionHeader(
-                  title: 'Color Matrix',
-                  subtitle: 'Optical grid transfer settings',
-                ),
-                GlassCard(
-                  child: Column(
-                    children: [
-                      ListTile(
-                        leading: const Icon(Icons.grid_view_rounded),
-                        title: const Text('Matrix Size'),
-                        subtitle: Text('${settings.colorMatrixSize}×${settings.colorMatrixSize}'),
-                        trailing: DropdownButton<int>(
-                          value: settings.colorMatrixSize,
-                          underline: const SizedBox.shrink(),
-                          items: const [
-                            DropdownMenuItem(value: 16, child: Text('16×16')),
-                            DropdownMenuItem(value: 24, child: Text('24×24')),
-                            DropdownMenuItem(value: 32, child: Text('32×32')),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              controller.updateColorMatrixSize(value);
-                            }
-                          },
-                        ),
-                      ),
                       const Divider(height: 1),
                       ListTile(
-                        leading: const Icon(Icons.speed_rounded),
-                        title: const Text('Frame Rate'),
-                        subtitle: Text(
-                          '${settings.colorTransferFrameRate.toStringAsFixed(1)} fps',
-                        ),
-                        trailing: SizedBox(
-                          width: 120,
-                          child: Slider(
-                            value: settings.colorTransferFrameRate,
-                            min: 1,
-                            max: 10,
-                            divisions: 9,
-                            onChanged: controller.updateColorTransferFrameRate,
-                          ),
-                        ),
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: const Icon(Icons.tune_rounded),
-                        title: const Text('Transport Quality'),
-                        trailing: DropdownButton<String>(
-                          value: settings.colorTransportQuality,
+                        title: const Text('Transfer mode'),
+                        subtitle: Text(settings.transferMode.id),
+                        trailing: DropdownButton<TransferMode>(
+                          value: settings.transferMode,
                           underline: const SizedBox.shrink(),
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'fast',
-                              child: Text('Fast'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'balanced',
-                              child: Text('Balanced'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'robust',
-                              child: Text('Robust'),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              controller.updateColorTransportQuality(value);
-                            }
+                          items: TransferMode.values
+                              .map(
+                                (m) => DropdownMenuItem(
+                                  value: m,
+                                  child: Text(m.id),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (m) {
+                            if (m != null) controller.updateTransferMode(m);
                           },
                         ),
                       ),
                       const Divider(height: 1),
                       SwitchListTile(
-                        title: const Text('Debug Overlay'),
-                        subtitle: const Text('Show detection diagnostics on camera'),
-                        value: settings.debugOverlay,
-                        onChanged: controller.toggleDebugOverlay,
-                      ),
-                      const Divider(height: 1),
-                      SwitchListTile(
-                        title: const Text('Experimental Features'),
-                        subtitle: const Text('Enable in-development transport options'),
-                        value: settings.experimentalFeatures,
-                        onChanged: controller.toggleExperimentalFeatures,
+                        title: const Text('Diagnostics'),
+                        subtitle: const Text('Show live transfer metrics'),
+                        value: settings.diagnosticsEnabled,
+                        onChanged: controller.toggleDiagnostics,
                       ),
                     ],
                   ),

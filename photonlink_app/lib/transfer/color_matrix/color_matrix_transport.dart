@@ -1,3 +1,5 @@
+import '../../protocols/interfaces/transfer_decoder.dart';
+import '../../protocols/interfaces/transfer_encoder.dart';
 import '../../protocols/interfaces/transport.dart';
 import '../../protocols/transfer_method.dart';
 import '../core/transfer_limits.dart';
@@ -30,10 +32,10 @@ class ColorMatrixTransport implements Transport<ColorMatrixFrame> {
   TransferMethod get method => TransferMethod.colorMatrix;
 
   @override
-  ColorMatrixFrameCodec get encoder => _codec;
+  TransferEncoder<ColorMatrixFrame> get encoder => _codec;
 
   @override
-  ColorMatrixFrameCodec get decoder => _codec;
+  TransferDecoder<ColorMatrixFrame> get decoder => _codec;
 
   @override
   ColorMatrixTransferLimitsResolver get limits => _limits;

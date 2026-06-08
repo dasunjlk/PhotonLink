@@ -1,107 +1,142 @@
 import 'dart:typed_data';
 
+import '../../core/constants.dart';
 import '../../protocols/interfaces/compression_type.dart';
 import '../../protocols/interfaces/encryption_mode.dart';
 import '../compression/compression_manager.dart';
 import '../encryption/encryption_manager.dart';
-import '../encryption/encryption_strategy.dart';
+import '../security/encryption_key_provider.dart';
+import 'integrity_verifier.dart';
 
-/// Result of applying forward payload transforms (compress -> encrypt).
-class PayloadTransformResult {
-  const PayloadTransformResult({
-    required this.bytes,
-    required this.compression,
-    required this.encryption,
-    this.kdfSalt,
-    this.encryptionNonce,
-  });
-
-  final Uint8List bytes;
-  final CompressionType compression;
-  final EncryptionMode encryption;
-  final Uint8List? kdfSalt;
-  final Uint8List? encryptionNonce;
-}
-
-/// Transport-agnostic compress/encrypt pipeline applied before chunking.
+/// Pre-chunk transform: compress → encrypt → hash (transport-agnostic).
 class PayloadPipeline {
   PayloadPipeline({
     CompressionManager? compressionManager,
     EncryptionManager? encryptionManager,
-  })  : _compression = compressionManager ?? const CompressionManager(),
-        _encryption = encryptionManager ?? EncryptionManager();
+    IntegrityVerifier? integrityVerifier,
+  })  : _compression = compressionManager ?? CompressionManager(),
+        _encryption = encryptionManager ?? EncryptionManager(),
+        _verifier = integrityVerifier ?? const IntegrityVerifier();
 
   final CompressionManager _compression;
   final EncryptionManager _encryption;
+  final IntegrityVerifier _verifier;
 
-  Future<PayloadTransformResult> forward({
-    required Uint8List plaintext,
-    required bool compressionEnabled,
-    required bool encryptionEnabled,
-    required String passphrase,
+  /// Result of preparing wire bytes for chunking.
+  Future<PayloadPrepareResult> prepareForSend({
+    required Uint8List fileBytes,
+    required CompressionType compression,
+    required EncryptionMode encryption,
+    required EncryptionKeyProvider keyProvider,
   }) async {
-    var bytes = plaintext;
-    final compression = compressionEnabled
-        ? CompressionType.gzip
-        : CompressionType.none;
+    final originalSha256 = _verifier.compute(fileBytes);
+    final originalSize = fileBytes.length;
 
-    if (compressionEnabled) {
-      bytes = _compression.strategyFor(compression).compress(bytes);
+    var bytes = fileBytes;
+    CompressionType usedCompression = CompressionType.none;
+    if (compression != CompressionType.none) {
+      final result = _compression.compress(bytes, compression);
+      bytes = Uint8List.fromList(result.bytes);
+      usedCompression = compression;
     }
 
-    final encryption = encryptionEnabled
-        ? EncryptionMode.chacha20Poly1305
-        : EncryptionMode.none;
-
-    Uint8List? salt;
-    Uint8List? nonce;
-
-    if (encryptionEnabled) {
-      final encrypted = await _encryption.encrypt(
-        mode: encryption,
+    var encryptionOverhead = 0;
+    if (encryption == EncryptionMode.enabled) {
+      if (!keyProvider.hasKey) {
+        throw StateError('Session key required for encryption');
+      }
+      final before = bytes.length;
+      bytes = await _encryption.encryptIfEnabled(
         plaintext: bytes,
-        passphrase: passphrase,
+        sessionKey: keyProvider.sessionKey,
+        mode: encryption,
       );
-      bytes = encrypted.ciphertext;
-      salt = encrypted.salt;
-      nonce = encrypted.nonce;
+      encryptionOverhead = bytes.length - before;
     }
 
-    return PayloadTransformResult(
-      bytes: bytes,
-      compression: compression,
+    final wireSha256 = _verifier.compute(bytes);
+
+    return PayloadPrepareResult(
+      wireBytes: bytes,
+      originalSize: originalSize,
+      originalSha256: originalSha256,
+      wireSha256: wireSha256,
+      compression: usedCompression,
       encryption: encryption,
-      kdfSalt: salt,
-      encryptionNonce: nonce,
+      encryptionOverheadBytes: encryptionOverhead,
+      compressionRatio:
+          originalSize > 0 ? bytes.length / originalSize : 1.0,
+      protocolVersion: AppConstants.protocolVersion,
     );
   }
 
-  Future<Uint8List> reverse({
-    required Uint8List transformed,
-    required CompressionType compression,
-    required EncryptionMode encryption,
-    required String passphrase,
-    Uint8List? kdfSalt,
-    Uint8List? encryptionNonce,
+  /// Inverse after reconstruction: decrypt → decompress.
+  Future<Uint8List> restorePlaintext({
+    required Uint8List wireBytes,
+    required MetadataPacketFields meta,
+    required EncryptionKeyProvider keyProvider,
   }) async {
-    var bytes = transformed;
-
-    if (encryption != EncryptionMode.none) {
-      bytes = await _encryption.decrypt(
-        mode: encryption,
-        payload: EncryptedPayload(
-          ciphertext: bytes,
-          nonce: encryptionNonce ?? Uint8List(0),
-          salt: kdfSalt ?? Uint8List(0),
-        ),
-        passphrase: passphrase,
+    var bytes = wireBytes;
+    if (meta.encryption == EncryptionMode.enabled) {
+      if (!keyProvider.hasKey) {
+        throw StateError('Session key required for decryption');
+      }
+      bytes = await _encryption.decryptIfEnabled(
+        wireBytes: bytes,
+        sessionKey: keyProvider.sessionKey,
+        mode: meta.encryption,
       );
     }
 
-    if (compression != CompressionType.none) {
-      bytes = _compression.strategyFor(compression).decompress(bytes);
+    if (meta.compression != CompressionType.none) {
+      final originalSize = meta.originalSize ?? bytes.length;
+      final result = _compression.decompress(
+        bytes,
+        type: meta.compression,
+        originalSize: originalSize,
+      );
+      bytes = Uint8List.fromList(result.bytes);
     }
 
     return bytes;
   }
+}
+
+/// Metadata fields needed for restore (avoids circular import with packet).
+class MetadataPacketFields {
+  const MetadataPacketFields({
+    required this.compression,
+    required this.encryption,
+    this.originalSize,
+    this.originalSha256,
+  });
+
+  final CompressionType compression;
+  final EncryptionMode encryption;
+  final int? originalSize;
+  final String? originalSha256;
+}
+
+class PayloadPrepareResult {
+  const PayloadPrepareResult({
+    required this.wireBytes,
+    required this.originalSize,
+    required this.originalSha256,
+    required this.wireSha256,
+    required this.compression,
+    required this.encryption,
+    required this.encryptionOverheadBytes,
+    required this.compressionRatio,
+    required this.protocolVersion,
+  });
+
+  final Uint8List wireBytes;
+  final int originalSize;
+  final String originalSha256;
+  final String wireSha256;
+  final CompressionType compression;
+  final EncryptionMode encryption;
+  final int encryptionOverheadBytes;
+  final double compressionRatio;
+  final int protocolVersion;
 }
