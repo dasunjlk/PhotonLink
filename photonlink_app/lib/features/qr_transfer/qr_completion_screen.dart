@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../shared/widgets/animated_pill_button.dart';
 import '../../shared/widgets/glass_card.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
+import '../../protocols/interfaces/compression_type.dart';
+import '../../protocols/interfaces/encryption_mode.dart';
 import '../../transfer/application/transfer_state.dart';
 import '../../ui/spacing.dart';
 
@@ -67,6 +69,30 @@ class QrCompletionScreen extends StatelessWidget {
                       _row('Error', state.errorMessage!),
                     if (state.duplicatesIgnored > 0)
                       _row('Duplicates ignored', '${state.duplicatesIgnored}'),
+                    _row(
+                      'Compression',
+                      state.compression == CompressionType.none
+                          ? 'Off'
+                          : state.compression.id,
+                    ),
+                    _row(
+                      'Encryption',
+                      state.encryption == EncryptionMode.enabled
+                          ? 'ChaCha20-Poly1305'
+                          : 'Off',
+                    ),
+                    if (state.compressionSavingsBytes > 0)
+                      _row(
+                        'Compression saved',
+                        '${state.compressionSavingsBytes} B',
+                      ),
+                    _row('Retries', '${state.diagnostics.retries}'),
+                    _row('ACK / NAK', '${state.diagnostics.ackCount} / ${state.diagnostics.nakCount}'),
+                    _row('Duration', '${state.diagnostics.durationMs} ms'),
+                    _row(
+                      'Throughput',
+                      '${state.diagnostics.throughputBytesPerSec.toStringAsFixed(0)} B/s',
+                    ),
                   ],
                 ),
               ),

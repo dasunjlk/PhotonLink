@@ -6,14 +6,16 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../core/router/app_router.dart';
 import '../../protocols/transfer_method.dart';
 import '../../services/permissions/permission_service.dart';
+import '../../shared/widgets/animated_pill_button.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
 import '../../shared/widgets/scan_frame_overlay.dart';
 import '../../transfer/application/transfer_providers.dart';
 import '../../transfer/application/transfer_state.dart';
 import '../../ui/spacing.dart';
-import 'widgets/transfer_progress_bar.dart';
+import 'widgets/diagnostics_panel.dart';
+import 'widgets/qr_frame_display.dart';
 
-/// QR receiver: continuous scan, decode packets, show progress.
+/// Bidirectional QR receiver: scan + display status QR.
 class QrReceiverScreen extends ConsumerStatefulWidget {
   const QrReceiverScreen({super.key});
 
@@ -22,210 +24,157 @@ class QrReceiverScreen extends ConsumerStatefulWidget {
 }
 
 class _QrReceiverScreenState extends ConsumerState<QrReceiverScreen> {
-  final _scannerController = MobileScannerController(
+  final _scanner = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
     facing: CameraFacing.back,
   );
-  final _permissionService = PermissionService();
-  bool _permissionGranted = false;
-  bool _checkingPermission = true;
-  DateTime _lastScan = DateTime.fromMillisecondsSinceEpoch(0);
-  static const _scanThrottleMs = 50;
+  final _permission = PermissionService();
+  bool _cameraOk = false;
+  bool _checking = true;
 
   @override
   void initState() {
     super.initState();
-    _initPermission();
+    _init();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(receiverControllerProvider.notifier).startReceiving();
+      ref.read(receiverControllerProvider.notifier).checkResumableSession();
     });
   }
 
-  Future<void> _initPermission() async {
+  Future<void> _init() async {
     try {
-      await _permissionService.ensureCamera();
-      if (mounted) {
-        setState(() {
-          _permissionGranted = true;
-          _checkingPermission = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _permissionGranted = false;
-          _checkingPermission = false;
-        });
-      }
+      await _permission.ensureCamera();
+      if (mounted) setState(() { _cameraOk = true; _checking = false; });
+    } catch (_) {
+      if (mounted) setState(() { _cameraOk = false; _checking = false; });
     }
-  }
-
-  void _onDetect(BarcodeCapture capture) {
-    final receiverState = ref.read(receiverControllerProvider);
-    if (receiverState.phase == TransferPhase.completed ||
-        receiverState.phase == TransferPhase.failed ||
-        receiverState.phase == TransferPhase.reconstructing) {
-      return;
-    }
-
-    final now = DateTime.now();
-    if (now.difference(_lastScan).inMilliseconds < _scanThrottleMs) return;
-
-    for (final barcode in capture.barcodes) {
-      final raw = barcode.rawValue;
-      if (raw == null || raw.isEmpty) continue;
-      _lastScan = now;
-      ref.read(receiverControllerProvider.notifier).onFrameScanned(raw);
-      break;
-    }
-
   }
 
   @override
   void dispose() {
     ref.read(receiverControllerProvider.notifier).reset();
-    _scannerController.dispose();
+    _scanner.dispose();
     super.dispose();
   }
 
+  bool _showDisplay(TransferPhase phase) =>
+      phase == TransferPhase.awaitingAcknowledgements ||
+      phase == TransferPhase.recoveringMissingPackets ||
+      phase == TransferPhase.completed;
+
+  bool _showScan(TransferPhase phase) =>
+      phase == TransferPhase.waitingForReceiver ||
+      phase == TransferPhase.receiving ||
+      phase == TransferPhase.resuming;
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final accent = TransferMethod.qr.accentColor;
-    final receiverState = ref.watch(receiverControllerProvider);
+    final state = ref.watch(receiverControllerProvider);
+    final notifier = ref.read(receiverControllerProvider.notifier);
+    final phase = state.phase;
 
-    ref.listen<ReceiverTransferState>(receiverControllerProvider, (prev, next) {
-      if (prev?.phase != TransferPhase.completed &&
-          next.phase == TransferPhase.completed) {
-        _scannerController.stop();
-        context.push(AppRoutes.qrComplete, extra: next);
-      } else if (prev?.phase != TransferPhase.failed &&
-          next.phase == TransferPhase.failed) {
-        _scannerController.stop();
-        context.push(AppRoutes.qrComplete, extra: next);
+    ref.listen<ReceiverTransferState>(receiverControllerProvider, (p, n) {
+      if (p?.phase != TransferPhase.completed &&
+          n.phase == TransferPhase.completed) {
+        context.push(AppRoutes.qrComplete, extra: n);
+      } else if (p?.phase != TransferPhase.failed && n.phase == TransferPhase.failed) {
+        context.push(AppRoutes.qrComplete, extra: n);
       }
     });
 
+    if (_checking) {
+      return const GradientScaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return GradientScaffold(
       appBar: photonAppBar(context, title: 'QR Receive'),
-      body: _checkingPermission
-          ? const Center(child: CircularProgressIndicator())
-          : !_permissionGranted
-              ? _PermissionDenied(onRetry: _initPermission)
-              : Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    MobileScanner(
-                      controller: _scannerController,
-                      onDetect: _onDetect,
-                    ),
-                    ScanFrameOverlay(
-                      label: 'Align QR code within frame',
-                    ),
-                    Positioned(
-                      left: AppSpacing.screenPadding,
-                      right: AppSpacing.screenPadding,
-                      bottom: AppSpacing.xxl,
-                      child: GlassProgressPanel(
-                        receiverState: receiverState,
-                        accent: accent,
-                        theme: theme,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (_showScan(phase) && _cameraOk)
+            MobileScanner(
+              controller: _scanner,
+              onDetect: (cap) {
+                for (final b in cap.barcodes) {
+                  final v = b.rawValue;
+                  if (v != null) notifier.onFrameScanned(v);
+                }
+              },
+            ),
+          if (_showDisplay(phase))
+            Center(
+              child: QrFrameDisplay(data: state.currentFrameData),
+            ),
+          if (_showScan(phase))
+            const ScanFrameOverlay(label: 'Scan sender QR frames'),
+          Positioned(
+            left: AppSpacing.screenPadding,
+            right: AppSpacing.screenPadding,
+            bottom: AppSpacing.lg,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (state.resumableSession != null &&
+                    phase == TransferPhase.waitingForReceiver)
+                  Card(
+                    child: ListTile(
+                      title: const Text('Resume session?'),
+                      trailing: TextButton(
+                        onPressed: () => notifier.restoreSession(
+                          state.resumableSession!,
+                        ),
+                        child: const Text('Resume'),
                       ),
                     ),
-                  ],
+                  ),
+                DiagnosticsPanel(
+                  diagnostics: state.diagnostics,
+                  progress: state.progress,
+                  progressLabel:
+                      '${state.receivedChunks}/${state.totalChunks} chunks',
+                  accentColor: accent,
+                  missingCount: state.missingCount,
+                  compression: state.compression,
+                  encryption: state.encryption,
+                  compressionSavingsBytes: state.compressionSavingsBytes,
                 ),
-    );
-  }
-}
-
-class GlassProgressPanel extends StatelessWidget {
-  const GlassProgressPanel({
-    required this.receiverState,
-    required this.accent,
-    required this.theme,
-    super.key,
-  });
-
-  final ReceiverTransferState receiverState;
-  final Color accent;
-  final ThemeData theme;
-
-  @override
-  Widget build(BuildContext context) {
-    final session = receiverState.session;
-    final label = session != null
-        ? '${receiverState.receivedChunks} / ${receiverState.totalChunks} chunks'
-        : 'Waiting for session QR…';
-
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white24),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (session != null) ...[
-            Text(
-              session.fileName,
-              style: theme.textTheme.titleSmall?.copyWith(color: Colors.white),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+                if (state.statusMessage != null)
+                  Text(
+                    state.statusMessage!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                const SizedBox(height: AppSpacing.sm),
+                if (phase == TransferPhase.receiving)
+                  AnimatedPillButton(
+                    label: 'Show NAK/ACK to Sender',
+                    icon: Icons.qr_code_rounded,
+                    color: accent,
+                    onPressed: notifier.showStatusToSender,
+                  ),
+                if (phase == TransferPhase.waitingForReceiver)
+                  AnimatedPillButton(
+                    label: 'Show Handshake (Resume)',
+                    icon: Icons.handshake_rounded,
+                    color: accent,
+                    isOutlined: true,
+                    onPressed: notifier.showHandshakeToSender,
+                  ),
+                AnimatedPillButton(
+                  label: 'Pause',
+                  icon: Icons.pause_rounded,
+                  color: accent,
+                  isOutlined: true,
+                  onPressed: notifier.pauseTransfer,
+                ),
+              ],
             ),
-            const SizedBox(height: AppSpacing.sm),
-          ],
-          TransferProgressBar(
-            progress: receiverState.progress,
-            label: label,
-            accentColor: accent,
           ),
-          if (receiverState.duplicatesIgnored > 0) ...[
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Duplicates ignored: ${receiverState.duplicatesIgnored}',
-              style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
-            ),
-          ],
-          if (receiverState.phase == TransferPhase.reconstructing)
-            const Padding(
-              padding: EdgeInsets.only(top: AppSpacing.sm),
-              child: LinearProgressIndicator(),
-            ),
         ],
-      ),
-    );
-  }
-}
-
-class _PermissionDenied extends StatelessWidget {
-  const _PermissionDenied({required this.onRetry});
-
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.no_photography_rounded, size: 64),
-            const SizedBox(height: AppSpacing.md),
-            const Text(
-              'Camera permission is required to scan QR codes.',
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            FilledButton(
-              onPressed: onRetry,
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -42,7 +42,7 @@ class QrProtocol
 
   @override
   Stream<String> encode(Uint8List input) async* {
-    final bundle = _sessionFactory.prepareSenderSession(
+    final bundle = _sessionFactory.prepareSenderSessionFromFile(
       fileBytes: input,
       fileName: 'file',
       mimeType: 'application/octet-stream',

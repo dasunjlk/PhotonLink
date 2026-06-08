@@ -35,7 +35,7 @@ class HistoryScreen extends ConsumerWidget {
               ),
               child: const SectionHeader(
                 title: 'Transfer History',
-                subtitle: 'Mock data — persistence coming in Phase 2',
+                subtitle: 'Persistent transfer log with diagnostics',
               ),
             ),
             _FilterChips(
@@ -124,6 +124,7 @@ class _HistoryTile extends StatelessWidget {
     return GlassCard(
       padding: const EdgeInsets.all(AppSpacing.md),
       accentColor: record.method.accentColor,
+      onTap: () => _showDetail(context, record),
       child: Row(
         children: [
           Container(
@@ -167,6 +168,45 @@ class _HistoryTile extends StatelessWidget {
             ),
           ),
           _StatusPill(status: record.status),
+        ],
+      ),
+    );
+  }
+
+  void _showDetail(BuildContext context, TransferRecord record) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(record.fileName),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Session: ${record.sessionId ?? '—'}'),
+            Text('Method: ${record.method.displayName}'),
+            Text('Protocol v${record.protocolVersion}'),
+            Text('Status: ${record.status.label}'),
+            Text('Retries: ${record.retryCount}'),
+            Text('Duration: ${record.durationMs} ms'),
+            Text('Compression: ${record.compressionUsed ? 'Yes' : 'No'}'),
+            Text('Encryption: ${record.encryptionUsed ? 'Yes' : 'No'}'),
+            if (record.compressionRatio != null)
+              Text(
+                'Compression ratio: ${record.compressionRatio!.toStringAsFixed(2)}',
+              ),
+            if (record.transferSpeedBytesPerSec != null)
+              Text(
+                'Speed: ${record.transferSpeedBytesPerSec!.toStringAsFixed(0)} B/s',
+              ),
+            if (record.failureReason != null)
+              Text('Failure: ${record.failureReason}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
         ],
       ),
     );
