@@ -11,7 +11,7 @@ class AppSettings {
     this.encryptionEnabled = false,
     this.preferredMethod = TransferMethod.qr,
     this.cameraResolution = 'high',
-    this.colorMatrixSize = 16,
+    this.colorMatrixSize = 24,
     this.colorTransferFrameRate = 4.0,
     this.colorTransportQuality = 'balanced',
     this.debugOverlay = false,

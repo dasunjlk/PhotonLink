@@ -28,14 +28,23 @@ abstract final class ColorMatrixSerializer {
 
   static ColorMatrixFrame? deserialize(Uint8List bytes) {
     if (bytes.length < 24) return null;
-    if (utf8.decode(bytes.sublist(0, 4)) != ColorMatrixFrame.magic) return null;
+    try {
+      if (utf8.decode(bytes.sublist(0, 4)) != ColorMatrixFrame.magic) return null;
+    } catch (_) {
+      return null;
+    }
 
     var offset = 4;
     final version = bytes[offset++];
     final isMetadata = bytes[offset++] == 0;
     final sessionLen = bytes[offset++];
     if (offset + sessionLen > bytes.length) return null;
-    final sessionId = utf8.decode(bytes.sublist(offset, offset + sessionLen));
+    late final String sessionId;
+    try {
+      sessionId = utf8.decode(bytes.sublist(offset, offset + sessionLen));
+    } catch (_) {
+      return null;
+    }
     offset += sessionLen;
 
     int readU32() {

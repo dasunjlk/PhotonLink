@@ -4,20 +4,16 @@
 
 PhotonLink enables file transfer between devices using only screens and cameras — no network, no servers, no Bluetooth.
 
-## Status: Phase 2 — QR Transfer MVP
+## Status: Phase 5 — Color Matrix Transport
 
-This release adds **QR-based optical file transfer** for small files:
+This release adds **Color Matrix optical transfer** alongside the existing QR MVP:
 
-- Supported types: `txt`, `pdf`, `jpg`, `png`, `zip`
-- Session metadata (ID, file name, size, chunk count, SHA-256)
-- Fixed-size chunking with reconstruction and duplicate handling
-- High-ECC QR frame streaming (adjustable frame rate on sender)
-- Continuous QR scanning on receiver (`mobile_scanner`)
-- SHA-256 integrity verification
-- Persistent transfer history
-- Session progress persistence (resume-ready foundation)
-
-**Not in this phase:** Color Matrix, Optical Stream, Audio, Rust FFI, encryption, compression, advanced ECC.
+- **QR Transfer** — scannable QR frame streaming (unchanged)
+- **Color Matrix Transfer** — RGB grid encoding with camera capture
+- Transport-agnostic protocol stack: compression (gzip), encryption (ChaCha20-Poly1305), reliability, diagnostics
+- Configurable matrix size (16/24/32), frame rate, quality settings
+- Persistent transfer history per transport method
+- 38 automated tests
 
 ## Quick Start
 
@@ -27,7 +23,9 @@ flutter pub get
 flutter run
 ```
 
-**Manual QR transfer test:** Device A → QR Transfer → Send → pick file → Start Transmission. Device B → QR Transfer → Receive → scan sender screen until progress completes.
+**QR transfer:** Device A → QR Transfer → Send → pick file. Device B → QR Transfer → Receive → scan.
+
+**Color Matrix:** Device A → Color Matrix → Send → pick file. Device B → Color Matrix → Receive → align matrix in camera frame.
 
 See [docs/SETUP.md](docs/SETUP.md) for platform setup.
 
@@ -38,37 +36,30 @@ See [docs/SETUP.md](docs/SETUP.md) for platform setup.
 | Frontend | Flutter 3.22+, Dart 3.3+ |
 | State | Riverpod 2 |
 | Navigation | go_router |
-| QR render | qr_flutter (ECC level H) |
-| QR scan | mobile_scanner |
+| QR | qr_flutter, mobile_scanner |
+| Color Matrix | camera, image, CustomPainter |
+| Encryption | cryptography (ChaCha20-Poly1305) |
 | Integrity | crypto (SHA-256) |
-| Storage | shared_preferences, path_provider |
 
 ## Project Structure
 
 ```
-PhotonLink/
-├── photonlink_app/lib/
-│   ├── core/              # Bootstrap, router, theme
-│   ├── protocols/         # Interfaces + QrProtocol
-│   ├── transfer/
-│   │   ├── core/          # Chunking, reconstruction, integrity (reusable)
-│   │   ├── qr/            # QR codec + stream (isolated)
-│   │   └── application/   # Riverpod controllers
-│   ├── features/
-│   │   └── qr_transfer/   # Sender, receiver, completion UI
-│   ├── history/           # Persistent history
-│   ├── settings/
-│   ├── services/
-│   └── ui/
-├── native/photonlink_core/
-└── docs/
+photonlink_app/lib/
+├── protocols/         # Interfaces + transport registry
+├── transfer/
+│   ├── core/          # Chunking, reconstruction, pipeline
+│   ├── compression/   # gzip strategies
+│   ├── encryption/    # ChaCha20 strategies
+│   ├── reliability/   # Missing packets, retry, recovery
+│   ├── diagnostics/   # Transfer metrics
+│   ├── qr/            # QR codec + transport
+│   ├── color_matrix/  # Color encoder/decoder/generator/detector
+│   └── application/   # Family controllers
+├── features/
+│   ├── qr_transfer/
+│   └── color_matrix_transfer/
+└── settings/
 ```
-
-## Dependencies (Phase 2)
-
-**Core:** `flutter_riverpod`, `go_router`, `shared_preferences`, `file_picker`, `permission_handler`, `google_fonts`, `flutter_animate`, `logger`, `intl`, `package_info_plus`, `camera`
-
-**Phase 2:** `qr_flutter`, `mobile_scanner`, `crypto`, `path_provider`
 
 ## Tests
 
@@ -77,12 +68,13 @@ cd photonlink_app
 flutter test
 ```
 
-15+ unit tests covering chunking, ordering, reconstruction, integrity, QR codec, plus widget smoke tests.
-
 ## Documentation
 
 - [Setup Guide](docs/SETUP.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Color Matrix Format](docs/COLOR_MATRIX_FORMAT.md)
+- [Performance Summary](docs/PHASE5_PERFORMANCE.md)
+- [Phase 6 Readiness](docs/PHASE6_READINESS.md)
 
 ## License
 

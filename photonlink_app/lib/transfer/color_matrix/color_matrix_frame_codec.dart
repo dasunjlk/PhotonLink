@@ -99,11 +99,15 @@ class ColorMatrixFrameCodec
     if (raw.cells.isEmpty) return null;
 
     ColorMatrixFrame? frame;
-    for (var len = maxSerializedBytes; len >= 24; len--) {
-      final bytes = _decoder.decodeCells(raw.cells, expectedByteLength: len);
-      if (!bytes.valid) continue;
-      frame = ColorMatrixSerializer.deserialize(bytes.frameBytes);
-      if (frame != null) break;
+    try {
+      for (var len = maxSerializedBytes; len >= 24; len--) {
+        final bytes = _decoder.decodeCells(raw.cells, expectedByteLength: len);
+        if (!bytes.valid) continue;
+        frame = ColorMatrixSerializer.deserialize(bytes.frameBytes);
+        if (frame != null) break;
+      }
+    } catch (_) {
+      return null;
     }
     if (frame == null) return null;
 
