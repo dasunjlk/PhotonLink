@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../protocols/transfer_method.dart';
+import '../../shared/platform_file_utils.dart';
 import '../../shared/widgets/animated_pill_button.dart';
 import '../../shared/widgets/glass_card.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
@@ -41,6 +42,7 @@ class _ColorMatrixSenderScreenState
         type: FileType.custom,
         allowedExtensions: ['txt', 'pdf', 'jpg', 'jpeg', 'png', 'zip'],
         allowMultiple: false,
+        withData: true,
       );
 
       if (result == null || result.files.isEmpty) {
@@ -49,9 +51,9 @@ class _ColorMatrixSenderScreenState
       }
 
       final file = result.files.first;
-      if (file.path == null) {
+      if (!isPlatformFileReady(file)) {
         setState(() {
-          _pickError = 'Could not access file path';
+          _pickError = 'Could not read file data';
           _isPicking = false;
         });
         return;
@@ -72,13 +74,14 @@ class _ColorMatrixSenderScreenState
 
   Future<void> _prepareAndStart() async {
     final file = _selectedFile;
-    if (file?.path == null) return;
+    if (file == null || !isPlatformFileReady(file)) return;
 
     final notifier = ref.read(colorMatrixSenderControllerProvider.notifier);
     await notifier.prepareTransfer(
-      filePath: file!.path!,
       fileName: file.name,
       extension: file.extension,
+      filePath: platformFilePath(file),
+      fileBytes: file.bytes,
     );
 
     final state = ref.read(colorMatrixSenderControllerProvider);
@@ -247,7 +250,10 @@ class _ColorMatrixSenderScreenState
                   icon: Icons.grid_view_rounded,
                   color: accent,
                   isOutlined: true,
-                  onPressed: _selectedFile?.path != null && !isPreparing
+                  onPressed:
+                      _selectedFile != null &&
+                          isPlatformFileReady(_selectedFile!) &&
+                          !isPreparing
                       ? _prepareAndStart
                       : null,
                 ),

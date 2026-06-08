@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../protocols/transfer_method.dart';
+import '../../shared/platform_file_utils.dart';
 import '../../services/permissions/permission_service.dart';
 import '../../shared/widgets/animated_pill_button.dart';
 import '../../shared/widgets/glass_card.dart';
@@ -180,6 +181,7 @@ class _QrSenderScreenState extends ConsumerState<QrSenderScreen> {
             final r = await FilePicker.platform.pickFiles(
               type: FileType.custom,
               allowedExtensions: ['txt', 'pdf', 'jpg', 'jpeg', 'png', 'zip'],
+              withData: true,
             );
             if (r != null && r.files.isNotEmpty) {
               setState(() => _file = r.files.first);
@@ -191,12 +193,13 @@ class _QrSenderScreenState extends ConsumerState<QrSenderScreen> {
           label: 'Start Reliable Transfer',
           icon: Icons.qr_code_2_rounded,
           color: accent,
-          onPressed: _file?.path != null
+          onPressed: _file != null && isPlatformFileReady(_file!)
               ? () async {
                   await notifier.prepareTransfer(
-                    filePath: _file!.path!,
                     fileName: _file!.name,
                     extension: _file!.extension,
+                    filePath: platformFilePath(_file!),
+                    fileBytes: _file!.bytes,
                   );
                   if (ref.read(senderControllerProvider).phase !=
                       TransferPhase.failed) {
