@@ -22,15 +22,28 @@ abstract final class TransferLimits {
   static const int maxQrFrameChars = 1800;
 
   /// Validates file size before read/chunking.
-  static void validateFileSize(int sizeBytes) {
+  static void validateFileSize(
+    int sizeBytes, {
+    int maxBytes = maxQrFileBytes,
+    String transportLabel = 'QR',
+  }) {
     if (sizeBytes < 0) {
       throw TransferLimitException('Invalid file size');
     }
-    if (sizeBytes > maxFileBytes) {
+    if (sizeBytes > maxBytes) {
       throw TransferLimitException(
-        'File exceeds ${maxFileBytes ~/ 1024} KB limit for QR transfer',
+        'File exceeds ${maxBytes ~/ 1024} KB limit for $transportLabel transfer',
       );
     }
+  }
+
+  /// Color Matrix file size validation (up to 2 MB).
+  static void validateColorMatrixFileSize(int sizeBytes) {
+    validateFileSize(
+      sizeBytes,
+      maxBytes: maxColorMatrixFileBytes,
+      transportLabel: 'Color Matrix',
+    );
   }
 
   /// Validates metadata from a decoded packet.
@@ -39,11 +52,12 @@ abstract final class TransferLimits {
     required int fileSize,
     required int totalChunks,
     required String sha256,
+    int maxBytes = maxQrFileBytes,
   }) {
     if (fileName.isEmpty || fileName.length > maxFileNameLength) {
       throw TransferLimitException('Invalid file name in metadata');
     }
-    if (fileSize < 0 || fileSize > maxFileBytes) {
+    if (fileSize < 0 || fileSize > maxBytes) {
       throw TransferLimitException('Invalid file size in metadata');
     }
     if (totalChunks < 1 || totalChunks > maxTotalChunks) {

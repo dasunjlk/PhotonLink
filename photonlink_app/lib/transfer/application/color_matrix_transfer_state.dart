@@ -20,7 +20,7 @@ class ColorMatrixSenderState {
     this.currentColorMatrixRaster,
     this.errorMessage,
     this.filePath,
-    this.diagnostics = const TransferDiagnostics(),
+    this.diagnostics = const FrameDiagnostics(),
     this.compression = CompressionType.none,
     this.encryption = EncryptionMode.disabled,
   });
@@ -34,7 +34,7 @@ class ColorMatrixSenderState {
   final Uint8List? currentColorMatrixRaster;
   final String? errorMessage;
   final String? filePath;
-  final TransferDiagnostics diagnostics;
+  final FrameDiagnostics diagnostics;
   final CompressionType compression;
   final EncryptionMode encryption;
 
@@ -48,7 +48,7 @@ class ColorMatrixSenderState {
     Uint8List? currentColorMatrixRaster,
     String? errorMessage,
     String? filePath,
-    TransferDiagnostics? diagnostics,
+    FrameDiagnostics? diagnostics,
     CompressionType? compression,
     EncryptionMode? encryption,
   }) {
@@ -82,7 +82,7 @@ class ColorMatrixReceiverState {
     this.integrityValid,
     this.errorMessage,
     this.duplicatesIgnored = 0,
-    this.diagnostics = const TransferDiagnostics(),
+    this.diagnostics = const FrameDiagnostics(),
     this.detectionAccuracy = 0.0,
     this.missingChunks = 0,
   });
@@ -96,7 +96,7 @@ class ColorMatrixReceiverState {
   final bool? integrityValid;
   final String? errorMessage;
   final int duplicatesIgnored;
-  final TransferDiagnostics diagnostics;
+  final FrameDiagnostics diagnostics;
   final double detectionAccuracy;
   final int missingChunks;
 
@@ -110,7 +110,7 @@ class ColorMatrixReceiverState {
     bool? integrityValid,
     String? errorMessage,
     int? duplicatesIgnored,
-    TransferDiagnostics? diagnostics,
+    FrameDiagnostics? diagnostics,
     double? detectionAccuracy,
     int? missingChunks,
   }) {

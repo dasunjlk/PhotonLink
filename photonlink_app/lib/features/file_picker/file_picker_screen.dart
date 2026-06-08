@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/errors/app_exceptions.dart';
@@ -138,7 +139,9 @@ class _FilePickerScreenState extends State<FilePickerScreen> {
                           ),
                         ),
                       ],
-                      if (file.path != null && !Platform.isWindows) ...[
+                      if (!kIsWeb &&
+                          file.path != null &&
+                          !Platform.isWindows) ...[
                         const SizedBox(height: AppSpacing.xs),
                         Text(
                           file.path!,

@@ -57,6 +57,7 @@ flutter analyze
 
 ## Documentation
 
+- [Phase 1–5 Audit](docs/AUDIT_PHASE1-5.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Color Matrix Format](docs/COLOR_MATRIX_FORMAT.md)
 - [Security review](docs/SECURITY.md)

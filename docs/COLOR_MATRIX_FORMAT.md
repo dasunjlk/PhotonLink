@@ -4,6 +4,8 @@
 
 Color Matrix Transport encodes transfer packets as RGB cells in a configurable grid (16×16, 24×24, or 32×32). Frames are displayed as animated rasters and captured by the receiver camera.
 
+Default grid size in app settings is **24×24**.
+
 ## Binary Frame Structure
 
 ```
@@ -35,7 +37,7 @@ PLCM | version(1) | type(M=0,D=1) | sessionIdLen | sessionId |
 ┌─────────────────────────────────┐
 │ ■ sync border (checkerboard)    │
 │ ┌─ RED ─────── GREEN ─┐         │
-│ │   16×16 data grid   │         │
+│ │   data grid         │         │
 │ │                     │         │
 │ └─ BLUE ────── YELLOW ┘         │
 └─────────────────────────────────┘
@@ -44,10 +46,27 @@ PLCM | version(1) | type(M=0,D=1) | sessionIdLen | sessionId |
 - **Orientation markers**: Red=TL, Green=TR, Blue=BL, Yellow=BR
 - **Sync border**: Alternating black/white for frame alignment
 
-## Metadata Extensions
+## Metadata JSON (wire payload in metadata frame)
 
-Metadata JSON includes optional transform fields (backward compatible with QR):
+Base fields (aligned with PL2 `MetadataPacket`):
 
-- `compression`: `none` | `gzip`
-- `encryption`: `none` | `chacha20_poly1305`
-- `transformedSize`, `kdfSalt`, `encryptionNonce`
+| Field | Type | Notes |
+|-------|------|-------|
+| `fileName` | string | Original file name |
+| `fileSize` | int | Wire payload size (post compress/encrypt) |
+| `totalChunks` | int | Data packet count |
+| `sha256` | string | SHA-256 of wire payload |
+| `mimeType` | string | MIME type |
+| `protocolVersion` | int | `2` for Phase 4 transforms |
+| `compression` | string | `none` \| `gzip` \| `lz4` (enum name) |
+| `encryption` | string | `disabled` \| `enabled` (enum name) |
+| `originalSize` | int? | Plaintext size before transforms |
+| `originalSha256` | string? | SHA-256 of original plaintext |
+
+Color Matrix–specific (when encryption enabled):
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `keyExchangePayload` | string? | Base64-encoded 256-bit session key (no separate setup QR) |
+
+**Security note:** The session key is visible on the optical channel. Encryption protects ciphertext from parties who do not capture the key frame. See `docs/SECURITY.md`.

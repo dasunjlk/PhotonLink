@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +11,7 @@ import '../color_matrix/color_matrix_frame.dart';
 import '../color_matrix/color_matrix_frame_codec.dart';
 import '../color_matrix/color_matrix_transfer_limits.dart';
 import '../core/frame_stream_controller.dart';
+import '../core/platform_file_reader.dart';
 import '../core/integrity_verifier.dart';
 import '../core/payload_pipeline.dart';
 import '../core/session_factory.dart';
@@ -29,7 +29,7 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
   String? _keyExchangePayload;
   final _keyProvider = EncryptionKeyProvider();
   final _keyExchange = SessionKeyExchange();
-  late DiagnosticsCollector _diagnostics;
+  late FrameDiagnosticsCollector _diagnostics;
 
   @override
   ColorMatrixSenderState build() {
@@ -44,9 +44,10 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
   PayloadPipeline get _pipeline => ref.read(payloadPipelineProvider);
 
   Future<void> prepareTransfer({
-    required String filePath,
     required String fileName,
     required String? extension,
+    String? filePath,
+    Uint8List? fileBytes,
   }) async {
     _stream?.dispose();
     _stream = null;
@@ -69,9 +70,11 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
         );
       }
 
-      final file = File(filePath);
-      TransferLimits.validateFileSize(await file.length());
-      final bytes = Uint8List.fromList(await file.readAsBytes());
+      final bytes = await loadFileBytes(
+        fileBytes: fileBytes,
+        filePath: filePath,
+      );
+      TransferLimits.validateColorMatrixFileSize(bytes.length);
 
       final settings = ref.read(settingsProvider);
       final compression = settings.effectiveCompression;
@@ -114,6 +117,7 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
         chunkSize: chunkSize,
         sessionIdOverride: sessionId,
         skipQrFrameValidation: true,
+        maxFileBytes: TransferLimits.maxColorMatrixFileBytes,
       );
 
       if (!ColorMatrixTransferLimits.allFramesFit(

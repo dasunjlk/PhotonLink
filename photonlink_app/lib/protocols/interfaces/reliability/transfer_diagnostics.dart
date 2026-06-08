@@ -1,6 +1,6 @@
-/// Structured diagnostics for a transfer session.
-class TransferDiagnostics {
-  const TransferDiagnostics({
+/// Frame-level diagnostics for optical transport (Color Matrix path).
+class FrameDiagnostics {
+  const FrameDiagnostics({
     this.framesGenerated = 0,
     this.framesReceived = 0,
     this.framesLost = 0,
@@ -24,7 +24,7 @@ class TransferDiagnostics {
   final double detectionAccuracy;
   final int missingPacketCount;
 
-  TransferDiagnostics copyWith({
+  FrameDiagnostics copyWith({
     int? framesGenerated,
     int? framesReceived,
     int? framesLost,
@@ -36,7 +36,7 @@ class TransferDiagnostics {
     double? detectionAccuracy,
     int? missingPacketCount,
   }) {
-    return TransferDiagnostics(
+    return FrameDiagnostics(
       framesGenerated: framesGenerated ?? this.framesGenerated,
       framesReceived: framesReceived ?? this.framesReceived,
       framesLost: framesLost ?? this.framesLost,
@@ -64,8 +64,8 @@ class TransferDiagnostics {
         'missingPacketCount': missingPacketCount,
       };
 
-  factory TransferDiagnostics.fromJson(Map<String, dynamic> json) {
-    return TransferDiagnostics(
+  factory FrameDiagnostics.fromJson(Map<String, dynamic> json) {
+    return FrameDiagnostics(
       framesGenerated: json['framesGenerated'] as int? ?? 0,
       framesReceived: json['framesReceived'] as int? ?? 0,
       framesLost: json['framesLost'] as int? ?? 0,
