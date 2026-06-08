@@ -2,229 +2,121 @@
 
 ## Overview
 
-PhotonLink is an offline peer-to-peer file transfer platform using optical communication (QR codes, color matrices, visual frame streams). **Phase 4** adds **compression, encryption, scheduling, and throughput monitoring** on top of the Phase 3 reliable bidirectional QR transport. All efficiency/security modules are **transport-agnostic**.
+PhotonLink is an offline peer-to-peer file transfer platform using optical communication (QR codes, color matrices). **Phase 4** adds compression, encryption, scheduling, and throughput monitoring on the reliable bidirectional QR transport. **Phase 5** adds **Color Matrix** as a second registered transport via a transport-agnostic protocol stack.
 
 ## Layer Diagram
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  features/  home · transfer_setup · qr_transfer · about   │
-│             camera_scan · file_picker (non-QR prototypes)  │
+│  features/  home · transfer_setup · qr_transfer ·        │
+│             color_matrix_transfer · settings · history   │
 ├──────────────────────────────────────────────────────────┤
 │  transfer/  core (chunking, payload pipeline, integrity) │
-│             compression · encryption · security        │
-│             scheduler · metrics (throughput)           │
-│             reliability · state · persistence          │
-│             qr (PL2 codec, stream)                     │
+│             compression · encryption · security          │
+│             scheduler · metrics · reliability          │
+│             qr/ · color_matrix/ · diagnostics/         │
 │             application (Riverpod controllers)         │
 ├──────────────────────────────────────────────────────────┤
-│  protocols/ interfaces + reliability/ + impl (QrProtocol)│
-│  settings/  │  history/  │  shared/widgets/  │  ui/       │
+│  protocols/ interfaces + transport_registry + impl       │
+│  settings/  │  history/  │  shared/widgets/  │  ui/     │
 ├──────────────────────────────────────────────────────────┤
 │  core/  bootstrap · router · theme · constants · errors  │
 └──────────────────────────────────────────────────────────┘
-         │                              │
-         ▼                              ▼
-   path_provider + SharedPreferences   native/photonlink_core
-   (history, session index)            (Rust stub — future FFI)
-   appDocs/photonlink_sessions/        (per-chunk disk store)
 ```
 
-## Dependency Rules
+## Transport Abstraction
 
-| Layer | May import from | Must NOT import |
-|-------|----------------|-----------------|
-| `ui/` | (none — leaf) | everything else |
-| `core/` | `ui/`, `services/` | `features/` |
-| `services/` | `core/` | widgets, features |
-| `protocols/` | `core/`, `transfer/core/` | widgets, features |
-| `transfer/core/` | `protocols/interfaces/` | widgets, features, `transfer/qr/` |
-| `transfer/reliability/` | `protocols/interfaces/reliability/` | widgets, features, Flutter |
-| `transfer/state/` | (self) | widgets, features |
-| `transfer/persistence/` | `protocols/`, `transfer/reliability/models/` | widgets, features |
-| `transfer/qr/` | `protocols/`, `transfer/core/` | widgets, features |
-| `transfer/application/` | `transfer/*`, `history/`, `services/` | widgets |
-| `features/` | all above | — |
+| Component | Role |
+|-----------|------|
+| `TransferMethod` | Transport type enum (`qr`, `colorMatrix`, …) |
+| `Transport<TFrame>` | Codec + limits + capabilities bundle |
+| `TransportRegistry` | DI registry consumed by controllers |
+| `TransferEncoder<T>` / `TransferDecoder<T>` | Packet ↔ frame encoding |
+| `TransportLimitsResolver<T>` | Chunk sizing and frame capacity |
+| `FrameStreamController<T>` | Cyclic frame emission (Color Matrix sender) |
 
-**Key rule:** Color Matrix, Optical Stream, and Audio (Phase 5+) reuse `transfer/core/`, `transfer/compression/`, `transfer/encryption/`, `transfer/reliability/`, and `protocols/interfaces/` without importing `transfer/qr/`.
+### Registered Transports
 
-## Phase 4 — Efficiency pipeline
+| Method | Frame Type | Module |
+|--------|-----------|--------|
+| `qr` | `String` (PL2 wire) | `transfer/qr/` |
+| `colorMatrix` | `ColorMatrixFrame` | `transfer/color_matrix/` |
+
+## Efficiency Pipeline (Phase 4)
 
 ```mermaid
 flowchart LR
-  file[File bytes] --> compress[GZip optional]
-  compress --> encrypt[ChaCha20-Poly1305 optional]
-  encrypt --> hash[Wire SHA-256]
-  hash --> chunk[ChunkingEngine]
-  chunk --> pl2[PL2 QR frames]
+  File[File bytes] --> Pipeline[PayloadPipeline]
+  Pipeline --> Chunk[ChunkingEngine]
+  Chunk --> Packets[TransferPacket]
+  Packets --> Codec[Transport Codec]
+  Codec --> Display[QR / Color Matrix]
+  Display -.-> Camera[Receiver Camera]
+  Camera --> Decode[Transport Decoder]
+  Decode --> Recon[ReconstructionEngine]
+  Recon --> Pipeline2[Reverse Pipeline]
+  Pipeline2 --> Verify[SHA-256 Integrity]
 ```
-
-Receiver: reconstruct wire → verify wire hash → decrypt → decompress → verify original hash → save plaintext.
-
-## Phase 4 modules
 
 | Module | Path | Role |
 |--------|------|------|
 | CompressionManager | `transfer/compression/` | GZip active; LZ4 placeholder |
 | EncryptionManager | `transfer/encryption/` | ChaCha20-Poly1305 AEAD |
-| KeyExchange | `transfer/security/` | Setup QR session key (future ECDH) |
-| PayloadPipeline | `transfer/core/payload_pipeline.dart` | Pre/post transform orchestration |
-| TransferScheduler | `transfer/scheduler/` | Normal vs performance FPS |
+| PayloadPipeline | `transfer/core/payload_pipeline.dart` | compress→encrypt / reverse |
+| TransferScheduler | `transfer/scheduler/` | Normal vs performance FPS (QR) |
 | ThroughputMonitor | `transfer/metrics/` | Bytes/sec, compression ratio |
-| PerformanceDiagnostics | `transfer/metrics/performance_diagnostics.dart` | Exportable report |
 
-## Packet versioning (protocol v2)
+## QR Transfer (Phase 3/4)
 
-- `SessionSetupPacket` — type `S`, key exchange payload
-- `MetadataPacket` — `protocolVersion`, `compression`, `encryption`, `originalSize`, `originalSha256`
-- ACK/NAK/Handshake — range-encoded IDs (`0-3,7`)
+Bidirectional round-based protocol with ACK/NAK recovery. Controllers: `senderControllerProvider`, `receiverControllerProvider` using `ReliableTransferContext`.
+
+Wire format: `PL2|<type>|<sessionId>|<seq>|<total>|<base64Payload>`
+
+Packet types: `MetadataPacket`, `DataPacket`, `SessionSetupPacket`, `AckPacket`, `NakPacket`, `HandshakePacket`, `ControlPacket`.
+
+When encryption is enabled, sender shows a **setup QR** first; receiver scans it before metadata.
 
 See [SECURITY.md](SECURITY.md) and [PHASE4_BENCHMARKS.md](PHASE4_BENCHMARKS.md).
 
-## Bidirectional QR Protocol (Phase 3)
+## Color Matrix Transfer (Phase 5)
 
-Each device has **screen + camera**. Roles alternate by `TransferPhase`:
+- PLCM v1 binary frames encoded as RGB cells
+- Configurable grid: 16×16, 24×24, 32×32
+- Orientation markers + sync border; camera image-stream decoding
+- Cyclic one-way broadcast (no ACK/NAK feedback)
+- Session key embedded in metadata JSON when encryption is enabled
 
-```mermaid
-sequenceDiagram
-  participant S as Sender device
-  participant R as Receiver device
-  S->>R: Metadata QR (loop)
-  R->>S: Handshake QR (ready + receivedChunkIds)
-  S->>R: Data window QR frames
-  S->>R: ControlPacket endOfRound QR
-  R->>S: NAK QR (missing) or ACK QR (complete)
-  Note over S,R: repeat until all chunks received
-  R->>S: ControlPacket complete (after SHA-256 OK)
-```
+Controllers: `colorMatrixSenderControllerProvider`, `colorMatrixReceiverControllerProvider`.
 
-Manual **Show status / Resume sending** buttons on each screen provide a fallback when automatic turn handoff is missed.
+See [COLOR_MATRIX_FORMAT.md](COLOR_MATRIX_FORMAT.md).
 
-## Wire Format (PL2)
+## Controllers
 
-```
-PL2|<type>|<sessionId>|<seq>|<total>|<base64Payload>
-```
+| Provider | Transport | Flow |
+|----------|-----------|------|
+| `senderControllerProvider` | QR | Round-based bidirectional |
+| `receiverControllerProvider` | QR | Round-based bidirectional |
+| `colorMatrixSenderControllerProvider` | Color Matrix | Cyclic frame stream |
+| `colorMatrixReceiverControllerProvider` | Color Matrix | Camera decode → reconstruct |
 
-| Type | Packet | Payload |
-|------|--------|---------|
-| `M` | `MetadataPacket` | JSON (fileName, fileSize, totalChunks, sha256, mimeType) |
-| `D` | `DataPacket` | Raw chunk bytes (Base64, not UTF-8) |
-| `A` | `AckPacket` | JSON (`packetIds`, `timestamp`) |
-| `N` | `NakPacket` | JSON (`missingPacketIds`, `timestamp`) |
-| `H` | `HandshakePacket` | JSON (`receivedChunkIds`, `timestamp`) |
-| `C` | `ControlPacket` | JSON (`type`, `timestamp`) — `ready`, `endOfRound`, `complete`, `pause`, `cancel`, `resumeRequest` |
+## State Machine
 
-High QR error correction (`QrErrorCorrectLevel.H`). `QrStreamController` supports continuous data looping and single **status/control** frames via `showStatusFrame()`.
+`lib/transfer/state/transfer_phase.dart` — 13 phases including `awaitingAcknowledgements`, `recoveringMissingPackets`, `reconstructing`. QR controllers enforce transitions via `TransferStateMachine`. Color Matrix controllers use a subset of phases.
 
-## Transport-Independent Interfaces
-
-### Packets (`lib/protocols/interfaces/transfer_packet.dart`)
-
-Sealed `TransferPacket`: `MetadataPacket`, `DataPacket`, `AckPacket`, `NakPacket`, `HandshakePacket`, `ControlPacket`.
-
-### Core transfer (`lib/protocols/interfaces/`)
-
-| Interface | Role |
-|-----------|------|
-| `TransferEncoder` / `TransferDecoder` | Frame encode/decode |
-| `ChunkManager` | `split()` / `merge()` |
-| `TransferSession` | Session metadata and progress |
-
-### Reliability (`lib/protocols/interfaces/reliability/`)
-
-| Interface | Implementation |
-|-----------|----------------|
-| `AcknowledgementManager` | `acknowledgement_manager_impl.dart` |
-| `MissingPacketTracker` | `missing_packet_tracker_impl.dart` — Set-based O(1), range compaction |
-| `RetryManager` | `retry_manager_impl.dart` + `RetryPolicy` |
-| `TransferRecoveryManager` | `transfer_recovery_manager_impl.dart` |
-| `SessionPersistenceManager` | `session_persistence_manager_impl.dart` |
-| `DiagnosticsCollector` | `diagnostics_collector_impl.dart` + `TransferDiagnostics` |
-
-None of the reliability implementations import Flutter or QR.
-
-## State Machine (13 phases)
-
-`lib/transfer/state/transfer_phase.dart` + `transfer_state_machine.dart`
-
-Phases: `idle`, `preparing`, `waitingForReceiver`, `transmitting`, `receiving`, `awaitingAcknowledgements`, `recoveringMissingPackets`, `paused`, `resuming`, `reconstructing`, `completed`, `failed`, `cancelled`.
-
-Validated transition table with sender/receiver role guards; invalid transitions return `false` (never silently corrupt state). Terminal: `completed`, `failed`, `cancelled`.
-
-UI helpers on `TransferPhase`: `showsQrDisplay`, `showsScanner` drive which widget is visible on sender/receiver screens.
-
-## Persistence and Resume
-
-| Component | Path | Role |
-|-----------|------|------|
-| `ReceivedChunkStore` | `appDocs/photonlink_sessions/<sessionId>/<chunkId>.bin` | O(1) per-chunk disk write |
-| `SessionPersistenceManagerImpl` | SharedPreferences index | metadata, received IDs, phase, diagnostics, retry counts |
-| `TransferRecoveryManager` | — | `missing = all − received` for resume |
-
-Resume: receiver sends `HandshakePacket` with `receivedChunkIds`; sender transmits only missing chunks. App re-entry shows **Resume?** when a persisted in-progress session exists.
-
-Legacy `SessionStore` is superseded by persistence managers; controllers use `ReliableTransferContext` to bundle managers.
-
-## Controller Flow (round-based)
-
-**Sender:** `preparing → waitingForReceiver (metadata QR) → transmitting (window) → endOfRound → awaitingAcknowledgements (scan NAK/ACK) → recovering/transmitting → completed`.
-
-**Receiver:** `waitingForReceiver (scan metadata) → receiving → NAK/ACK QR → recovering → reconstructing (SHA-256) → complete control QR`.
-
-Both use `TransferStateMachine`, reliability managers, and `DiagnosticsCollector` for live UI metrics.
-
-## State Management (Riverpod 2)
-
-| Provider | Purpose |
-|----------|---------|
-| `senderControllerProvider` | Bidirectional sender flow |
-| `receiverControllerProvider` | Bidirectional receiver flow |
-| `ackManagerProvider`, `missingTrackerProvider`, … | Reliability layer DI |
-| `stateMachineProvider` | Per-role state machine |
-| `sessionPersistenceProvider`, `chunkStoreProvider` | Resume |
-| `historyProvider` | History v2 (`transfer_history_v2`) |
-
-## Navigation
+## Routes
 
 | Route | Screen |
 |-------|--------|
-| `/` | Home |
-| `/transfer/:method` | Transfer Setup |
-| `/qr/send` | QR Sender (QR display + scanner by phase) |
-| `/qr/receive` | QR Receiver (scanner + QR display by phase) |
-| `/qr/complete` | Completion + diagnostics summary |
-| `/history` | History list + detail sheet |
-| `/settings`, `/about` | Settings, About |
+| `/qr/send`, `/qr/receive`, `/qr/complete` | QR transfer |
+| `/color-matrix/send`, `/color-matrix/receive`, `/color-matrix/complete` | Color Matrix |
+| `/settings`, `/history` | Settings, History |
 
-## History (v2)
+## Test Coverage
 
-`TransferRecord` fields: `sessionId`, `durationMs`, `retryCount`, `failureReason` (plus status, method, timestamp, fileName). Repository key `transfer_history_v2` with defaults for migrated v1 records.
+Run: `cd photonlink_app && flutter test`
 
-## Test Coverage (Phase 3)
+Includes Phase 3–4 QR reliability, compression, encryption, pipeline, scheduler, throughput, plus Color Matrix encode/decode/generation/detection tests.
 
-| Area | Tests |
-|------|-------|
-| Core | `chunk_manager`, `chunk_ordering`, `reconstruction`, `reconstruction_hardening`, `integrity` |
-| QR codec | `qr_codec_test`, `qr_codec_validation_test`, `qr_reliability_codec_test` |
-| Reliability | `ack_manager_test`, `nak_tracker_test`, `retry_manager_test` |
-| State | `state_machine_test` |
-| Integration | `resume_recovery_test` |
-| UI | `widget_test` |
+## Future Transports
 
-Run: `cd photonlink_app && flutter test` (35+ tests).
-
-## Known Limitations
-
-- Max file size 512 KB (`TransferLimits`)
-- History append rewrites full JSON list (SQLite deferred)
-- No compression, encryption, Reed-Solomon, or fountain codes
-- Color Matrix / Optical Stream / Audio still `isAvailable: false`
-- Manual two-device QR timing depends on frame rate and lighting
-
-## Phase 4+ Roadmap
-
-- **Color Matrix / Optical Stream / Audio:** implement `TransferEncoder`/`Decoder` per transport; inject same reliability managers and state machine
-- Rust FFI acceleration for chunking/hash
-- Compression and encryption
-- SQLite history backend
+`Transport<T>` abstraction supports `opticalStream`, `audio`, `flash` without changing the core pipeline. See [PHASE6_READINESS.md](PHASE6_READINESS.md).

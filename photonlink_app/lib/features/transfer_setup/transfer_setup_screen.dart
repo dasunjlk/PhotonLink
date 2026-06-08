@@ -69,6 +69,8 @@ class TransferSetupScreen extends StatelessWidget {
                 onPressed: () {
                   if (method == TransferMethod.qr) {
                     context.push(AppRoutes.qrSend);
+                  } else if (method == TransferMethod.colorMatrix) {
+                    context.push(AppRoutes.colorMatrixSend);
                   } else {
                     context.push(
                       '${AppRoutes.pick}?method=${method.routeName}',
@@ -85,6 +87,8 @@ class TransferSetupScreen extends StatelessWidget {
                 onPressed: () {
                   if (method == TransferMethod.qr) {
                     context.push(AppRoutes.qrReceive);
+                  } else if (method == TransferMethod.colorMatrix) {
+                    context.push(AppRoutes.colorMatrixReceive);
                   } else {
                     context.push(
                       '${AppRoutes.scan}?method=${method.routeName}',

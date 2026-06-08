@@ -1,11 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../protocols/transport_registry.dart';
 import '../../services/storage/preferences_service.dart';
 import '../compression/compression_manager.dart';
 import '../core/chunking_engine.dart';
 import '../core/integrity_verifier.dart';
 import '../core/payload_pipeline.dart';
 import '../core/session_factory.dart';
+import '../diagnostics/diagnostics_collector.dart';
 import '../encryption/encryption_manager.dart';
 import '../metrics/throughput_monitor.dart';
 import '../persistence/received_chunk_store.dart';
@@ -19,6 +21,9 @@ import '../reliability/transfer_recovery_manager_impl.dart';
 import '../scheduler/transfer_scheduler.dart';
 import '../security/encryption_key_provider.dart';
 import '../security/session_key_exchange.dart';
+import 'color_matrix_receiver_controller.dart';
+import 'color_matrix_sender_controller.dart';
+import 'color_matrix_transfer_state.dart';
 import 'receiver_controller.dart';
 import 'sender_controller.dart';
 import 'transfer_state.dart';
@@ -74,6 +79,10 @@ final diagnosticsCollectorProvider = Provider<DiagnosticsCollectorImpl>(
   (ref) => DiagnosticsCollectorImpl(),
 );
 
+final colorMatrixDiagnosticsCollectorProvider = Provider<DiagnosticsCollector>(
+  (ref) => DiagnosticsCollector(ref.watch(preferencesServiceProvider)),
+);
+
 final transferRecoveryManagerProvider = Provider<TransferRecoveryManagerImpl>(
   (ref) => TransferRecoveryManagerImpl(),
 );
@@ -103,12 +112,26 @@ final sessionKeyExchangeProvider = Provider<SessionKeyExchange>(
   (ref) => SessionKeyExchange(),
 );
 
+/// QR bidirectional sender (Phase 4).
 final senderControllerProvider =
     NotifierProvider<SenderController, SenderTransferState>(
   SenderController.new,
 );
 
+/// QR bidirectional receiver (Phase 4).
 final receiverControllerProvider =
     NotifierProvider<ReceiverController, ReceiverTransferState>(
   ReceiverController.new,
+);
+
+/// Color Matrix cyclic sender.
+final colorMatrixSenderControllerProvider =
+    NotifierProvider<ColorMatrixSenderController, ColorMatrixSenderState>(
+  ColorMatrixSenderController.new,
+);
+
+/// Color Matrix camera receiver.
+final colorMatrixReceiverControllerProvider =
+    NotifierProvider<ColorMatrixReceiverController, ColorMatrixReceiverState>(
+  ColorMatrixReceiverController.new,
 );

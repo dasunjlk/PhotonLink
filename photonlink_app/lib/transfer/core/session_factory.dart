@@ -62,6 +62,7 @@ class SessionFactory {
     EncryptionMode encryption = EncryptionMode.disabled,
     int? chunkSize,
     String? sessionIdOverride,
+    bool skipQrFrameValidation = false,
   }) {
     TransferLimits.validateFileSize(wireBytes.length);
 
@@ -107,16 +108,18 @@ class SessionFactory {
       sha256: metadata.sha256,
     );
 
-    const codec = QrFrameCodec();
-    if (!QrTransferLimits.allDataFramesFit(
-      sessionId,
-      metadata,
-      dataPackets,
-      codec,
-    )) {
-      throw TransferLimitException(
-        'Encoded QR frames exceed safe size limit',
-      );
+    if (!skipQrFrameValidation) {
+      const codec = QrFrameCodec();
+      if (!QrTransferLimits.allDataFramesFit(
+        sessionId,
+        metadata,
+        dataPackets,
+        codec,
+      )) {
+        throw TransferLimitException(
+          'Encoded QR frames exceed safe size limit',
+        );
+      }
     }
 
     final session = TransferSession(

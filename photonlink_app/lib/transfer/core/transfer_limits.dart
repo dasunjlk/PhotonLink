@@ -1,7 +1,13 @@
-/// Resource and protocol limits for QR transfer (Phase 2 MVP).
+/// Resource and protocol limits for optical transfer.
 abstract final class TransferLimits {
   /// Maximum file size accepted for QR transfer (~512 KB).
-  static const int maxFileBytes = 512 * 1024;
+  static const int maxQrFileBytes = 512 * 1024;
+
+  /// Maximum file size accepted for Color Matrix transfer (~2 MB).
+  static const int maxColorMatrixFileBytes = 2 * 1024 * 1024;
+
+  /// Legacy alias for QR max file size.
+  static const int maxFileBytes = maxQrFileBytes;
 
   /// Maximum number of chunks per session.
   static const int maxTotalChunks = 4096;
