@@ -1,7 +1,10 @@
 import 'dart:math';
 import 'dart:typed_data';
 
+import '../../core/constants.dart';
 import '../../protocols/interfaces/chunk_manager.dart';
+import '../../protocols/interfaces/compression_type.dart';
+import '../../protocols/interfaces/encryption_mode.dart';
 import '../../protocols/interfaces/transfer_packet.dart';
 import '../../protocols/interfaces/transfer_session.dart';
 import '../qr/qr_frame_codec.dart';
@@ -22,34 +25,57 @@ class SessionFactory {
   final IntegrityVerifier _integrityVerifier;
   final _random = Random();
 
-  /// Generates a unique session ID.
   String generateSessionId() {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final nonce = _random.nextInt(0xFFFFFF);
     return 'pl-${timestamp.toRadixString(36)}-${nonce.toRadixString(36)}';
   }
 
-  /// Prepares a full sender session: metadata + data packets.
-  SenderSessionBundle prepareSenderSession({
+  /// Prepares sender session from raw file bytes (no compress/encrypt).
+  SenderSessionBundle prepareSenderSessionFromFile({
     required Uint8List fileBytes,
     required String fileName,
     required String mimeType,
     int? chunkSize,
   }) {
-    TransferLimits.validateFileSize(fileBytes.length);
-
-    final sessionId = generateSessionId();
     final sha256 = _integrityVerifier.compute(fileBytes);
+    return prepareSenderSession(
+      wireBytes: fileBytes,
+      fileName: fileName,
+      mimeType: mimeType,
+      wireSha256: sha256,
+      originalSize: fileBytes.length,
+      originalSha256: sha256,
+      chunkSize: chunkSize,
+    );
+  }
+
+  /// Prepares sender session from wire bytes (post compress/encrypt).
+  SenderSessionBundle prepareSenderSession({
+    required Uint8List wireBytes,
+    required String fileName,
+    required String mimeType,
+    required String wireSha256,
+    required int originalSize,
+    required String originalSha256,
+    CompressionType compression = CompressionType.none,
+    EncryptionMode encryption = EncryptionMode.disabled,
+    int? chunkSize,
+    String? sessionIdOverride,
+  }) {
+    TransferLimits.validateFileSize(wireBytes.length);
+
+    final sessionId = sessionIdOverride ?? generateSessionId();
 
     final resolvedChunkSize = chunkSize ??
         QrTransferLimits.resolveChunkSize(
           sessionId: sessionId,
-          fileBytes: fileBytes,
+          fileBytes: wireBytes,
           chunkManager: _chunkManager,
         );
 
     final dataPackets = _chunkManager.split(
-      data: fileBytes,
+      data: wireBytes,
       sessionId: sessionId,
       chunkSize: resolvedChunkSize,
     );
@@ -63,10 +89,15 @@ class SessionFactory {
     final metadata = MetadataPacket(
       sessionId: sessionId,
       fileName: fileName,
-      fileSize: fileBytes.length,
+      fileSize: wireBytes.length,
       totalChunks: dataPackets.length,
-      sha256: sha256,
+      sha256: wireSha256,
       mimeType: mimeType,
+      protocolVersion: AppConstants.protocolVersion,
+      compression: compression,
+      encryption: encryption,
+      originalSize: originalSize,
+      originalSha256: originalSha256,
     );
 
     TransferLimits.validateMetadata(
@@ -91,9 +122,9 @@ class SessionFactory {
     final session = TransferSession(
       id: sessionId,
       fileName: fileName,
-      fileSize: fileBytes.length,
+      fileSize: originalSize,
       totalChunks: dataPackets.length,
-      sha256: sha256,
+      sha256: originalSha256,
       mimeType: mimeType,
       state: TransferSessionState.preparing,
       startedAt: DateTime.now(),
@@ -107,17 +138,18 @@ class SessionFactory {
   }
 }
 
-/// Bundle returned when preparing a sender session.
 class SenderSessionBundle {
   const SenderSessionBundle({
     required this.session,
     required this.metadata,
     required this.dataPackets,
+    this.setupPacket,
   });
 
   final TransferSession session;
   final MetadataPacket metadata;
   final List<DataPacket> dataPackets;
+  final SessionSetupPacket? setupPacket;
 
   List<TransferPacket> get allPackets => [metadata, ...dataPackets];
 }

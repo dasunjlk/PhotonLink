@@ -1,10 +1,12 @@
+import '../../protocols/interfaces/compression_type.dart';
+import '../../protocols/interfaces/encryption_mode.dart';
 import '../../protocols/interfaces/transfer_session.dart';
 import '../reliability/models/transfer_diagnostics.dart';
 import '../state/transfer_phase.dart';
 
 export '../state/transfer_phase.dart';
 
-/// Sender-side state with Phase 3 diagnostics.
+/// Sender-side state with Phase 3/4 diagnostics.
 class SenderTransferState {
   const SenderTransferState({
     this.phase = TransferPhase.idle,
@@ -21,6 +23,10 @@ class SenderTransferState {
     this.missingCount = 0,
     this.roundNumber = 0,
     this.resumableSession,
+    this.compression = CompressionType.none,
+    this.encryption = EncryptionMode.disabled,
+    this.compressionRatio = 1.0,
+    this.compressionSavingsBytes = 0,
   });
 
   final TransferPhase phase;
@@ -37,6 +43,10 @@ class SenderTransferState {
   final int missingCount;
   final int roundNumber;
   final String? resumableSession;
+  final CompressionType compression;
+  final EncryptionMode encryption;
+  final double compressionRatio;
+  final int compressionSavingsBytes;
 
   SenderTransferState copyWith({
     TransferPhase? phase,
@@ -53,6 +63,10 @@ class SenderTransferState {
     int? missingCount,
     int? roundNumber,
     String? resumableSession,
+    CompressionType? compression,
+    EncryptionMode? encryption,
+    double? compressionRatio,
+    int? compressionSavingsBytes,
   }) {
     return SenderTransferState(
       phase: phase ?? this.phase,
@@ -69,11 +83,16 @@ class SenderTransferState {
       missingCount: missingCount ?? this.missingCount,
       roundNumber: roundNumber ?? this.roundNumber,
       resumableSession: resumableSession ?? this.resumableSession,
+      compression: compression ?? this.compression,
+      encryption: encryption ?? this.encryption,
+      compressionRatio: compressionRatio ?? this.compressionRatio,
+      compressionSavingsBytes:
+          compressionSavingsBytes ?? this.compressionSavingsBytes,
     );
   }
 }
 
-/// Receiver-side state with Phase 3 diagnostics.
+/// Receiver-side state with Phase 3/4 diagnostics.
 class ReceiverTransferState {
   const ReceiverTransferState({
     this.phase = TransferPhase.idle,
@@ -91,6 +110,10 @@ class ReceiverTransferState {
     this.resumableSession,
     this.statusMessage,
     this.currentFrameData,
+    this.compression = CompressionType.none,
+    this.encryption = EncryptionMode.disabled,
+    this.compressionRatio = 1.0,
+    this.compressionSavingsBytes = 0,
   });
 
   final TransferPhase phase;
@@ -108,6 +131,10 @@ class ReceiverTransferState {
   final String? resumableSession;
   final String? statusMessage;
   final String? currentFrameData;
+  final CompressionType compression;
+  final EncryptionMode encryption;
+  final double compressionRatio;
+  final int compressionSavingsBytes;
 
   ReceiverTransferState copyWith({
     TransferPhase? phase,
@@ -125,6 +152,10 @@ class ReceiverTransferState {
     String? resumableSession,
     String? statusMessage,
     String? currentFrameData,
+    CompressionType? compression,
+    EncryptionMode? encryption,
+    double? compressionRatio,
+    int? compressionSavingsBytes,
   }) {
     return ReceiverTransferState(
       phase: phase ?? this.phase,
@@ -142,6 +173,11 @@ class ReceiverTransferState {
       resumableSession: resumableSession ?? this.resumableSession,
       statusMessage: statusMessage ?? this.statusMessage,
       currentFrameData: currentFrameData ?? this.currentFrameData,
+      compression: compression ?? this.compression,
+      encryption: encryption ?? this.encryption,
+      compressionRatio: compressionRatio ?? this.compressionRatio,
+      compressionSavingsBytes:
+          compressionSavingsBytes ?? this.compressionSavingsBytes,
     );
   }
 }

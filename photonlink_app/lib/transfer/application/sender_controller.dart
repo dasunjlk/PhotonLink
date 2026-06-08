@@ -4,11 +4,18 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/constants.dart';
 import '../../history/application/history_controller.dart';
 import '../../history/domain/transfer_record.dart';
+import '../../protocols/interfaces/compression_type.dart';
+import '../../protocols/interfaces/encryption_mode.dart';
 import '../../protocols/interfaces/transfer_packet.dart';
 import '../../protocols/transfer_method.dart';
+import '../../settings/application/settings_controller.dart';
+import '../../settings/domain/app_settings.dart';
+import '../security/key_exchange.dart';
 import '../core/integrity_verifier.dart';
+import '../core/payload_pipeline.dart';
 import '../core/session_factory.dart';
 import '../core/transfer_limits.dart';
 import '../persistence/session_persistence_manager_impl.dart';
@@ -19,7 +26,7 @@ import 'reliable_transfer_context.dart';
 import 'transfer_providers.dart';
 import 'transfer_state.dart';
 
-/// Round-based bidirectional QR sender with ACK/NAK recovery.
+/// Round-based bidirectional QR sender with ACK/NAK recovery + Phase 4 transforms.
 class SenderController extends Notifier<SenderTransferState> {
   QrStreamController? _stream;
   SenderSessionBundle? _bundle;
@@ -33,9 +40,12 @@ class SenderController extends Notifier<SenderTransferState> {
   }
 
   SessionFactory get _sessionFactory => ref.read(sessionFactoryProvider);
+  PayloadPipeline get _pipeline => ref.read(payloadPipelineProvider);
   QrFrameCodec get _codec => ref.read(qrFrameCodecProvider);
   SessionPersistenceManagerImpl get _persistence =>
       ref.read(sessionPersistenceManagerProvider);
+
+  AppSettings get _settings => ref.read(settingsProvider);
 
   Future<void> prepareTransfer({
     required String filePath,
@@ -58,22 +68,82 @@ class SenderController extends Notifier<SenderTransferState> {
       }
       final file = File(filePath);
       TransferLimits.validateFileSize(await file.length());
-      final bytes = await file.readAsBytes();
+      final bytes = Uint8List.fromList(await file.readAsBytes());
+
+      final compression = _settings.effectiveCompression;
+      final encryption = _settings.encryptionEnabled
+          ? EncryptionMode.enabled
+          : EncryptionMode.disabled;
+
+      KeyExchangeResult? keyResult;
+      if (encryption == EncryptionMode.enabled) {
+        keyResult = await _ctx.keyExchange.generateForSender();
+        _ctx.keyProvider.setSessionKey(keyResult.sessionKey);
+      }
+
+      final prepared = await _pipeline.prepareForSend(
+        fileBytes: bytes,
+        compression: compression,
+        encryption: encryption,
+        keyProvider: _ctx.keyProvider,
+      );
+
+      _ctx.throughput.setCompressionRatio(prepared.compressionRatio);
+      _ctx.throughput.addEncryptionOverhead(prepared.encryptionOverheadBytes);
 
       _bundle = _sessionFactory.prepareSenderSession(
-        fileBytes: Uint8List.fromList(bytes),
+        wireBytes: prepared.wireBytes,
         fileName: fileName,
         mimeType: mimeTypeFromExtension(extension),
+        wireSha256: prepared.wireSha256,
+        originalSize: prepared.originalSize,
+        originalSha256: prepared.originalSha256,
+        compression: prepared.compression,
+        encryption: prepared.encryption,
       );
+
+      SessionSetupPacket? setup;
+      if (encryption == EncryptionMode.enabled && keyResult != null) {
+        setup = SessionSetupPacket(
+          sessionId: _bundle!.metadata.sessionId,
+          protocolVersion: AppConstants.protocolVersion,
+          keyExchangePayload: keyResult.payloadBase64,
+          compression: compression,
+          encryption: encryption,
+          timestamp: DateTime.now(),
+        );
+      }
+
+      _bundle = SenderSessionBundle(
+        session: _bundle!.session,
+        metadata: _bundle!.metadata,
+        dataPackets: _bundle!.dataPackets,
+        setupPacket: setup,
+      );
+
+      _ctx.setupPacket = setup;
       _ctx.bindSession(_bundle!.metadata);
+      _ctx.diagnostics.setCompressionStats(
+        savingsBytes: prepared.originalSize - prepared.wireBytes.length,
+        ratio: prepared.compressionRatio,
+      );
+      _ctx.diagnostics.setEncryptionUsed(encryption == EncryptionMode.enabled);
+
       _stream = QrStreamController();
+      final fps = _settings.transferMode.framesPerSecond;
 
       state = SenderTransferState(
         phase: TransferPhase.preparing,
         session: _bundle!.session,
         totalFrames: _bundle!.dataPackets.length,
         filePath: filePath,
+        framesPerSecond: fps,
         diagnostics: _ctx.diagnostics.snapshot,
+        compression: compression,
+        encryption: encryption,
+        compressionRatio: prepared.compressionRatio,
+        compressionSavingsBytes:
+            prepared.originalSize - prepared.wireBytes.length,
       );
       _transition(TransferPhase.waitingForReceiver);
       await _persist();
@@ -89,6 +159,7 @@ class SenderController extends Notifier<SenderTransferState> {
 
     final historyId =
         '${_bundle!.session.id}-send-${DateTime.now().millisecondsSinceEpoch}';
+    final snap = _ctx.throughput.snapshot();
     await ref.read(historyRepositoryProvider).addRecord(
           TransferRecord(
             id: historyId,
@@ -99,16 +170,29 @@ class SenderController extends Notifier<SenderTransferState> {
             status: TransferStatus.inProgress,
             timestamp: DateTime.now(),
             direction: TransferDirection.sent,
+            compressionUsed: _bundle!.metadata.compression != CompressionType.none,
+            encryptionUsed:
+                _bundle!.metadata.encryption == EncryptionMode.enabled,
+            compressionRatio: _bundle!.metadata.compression != CompressionType.none
+                ? state.compressionRatio
+                : null,
+            transferSpeedBytesPerSec: snap.averageBytesPerSec,
+            protocolVersion: _bundle!.metadata.protocolVersion,
           ),
         );
     ref.invalidate(historyProvider);
 
     state = state.copyWith(historyRecordId: historyId);
-    _beginMetadataBroadcast();
+    _beginSetupAndMetadataBroadcast();
   }
 
-  void _beginMetadataBroadcast() {
-    _stream!.setPackets([_bundle!.metadata]);
+  void _beginSetupAndMetadataBroadcast() {
+    final packets = <TransferPacket>[];
+    if (_bundle!.setupPacket != null) {
+      packets.add(_bundle!.setupPacket!);
+    }
+    packets.add(_bundle!.metadata);
+    _stream!.setPackets(packets);
     _transition(TransferPhase.waitingForReceiver);
     _stream!.start(
       framesPerSecond: state.framesPerSecond,
@@ -123,7 +207,6 @@ class SenderController extends Notifier<SenderTransferState> {
     _syncState();
   }
 
-  /// Sender scans receiver handshake/NAK/ACK (bidirectional turn).
   void onFrameScanned(String raw) {
     if (_ctx.isFinalizing || state.phase.isTerminal) return;
     final packet = _codec.decodeFrame(raw);
@@ -178,6 +261,7 @@ class SenderController extends Notifier<SenderTransferState> {
   void _handleAck(AckPacket ack) {
     if (_bundle == null || ack.sessionId != _bundle!.session.id) return;
     _ctx.ackManager.processAck(ack);
+    _ctx.diagnostics.recordAck();
     if (_ctx.ackManager.allAcknowledged ||
         ack.packetIds.length >= _bundle!.metadata.totalChunks) {
       _completeSuccess();
@@ -210,23 +294,24 @@ class SenderController extends Notifier<SenderTransferState> {
     }
 
     final toSend = _ctx.packetsForIds(_bundle!.dataPackets, missing);
-    final queue = <TransferPacket>[
-      ...toSend,
-      ControlPacket(
-        sessionId: _bundle!.session.id,
-        type: ControlType.endOfRound,
-        timestamp: DateTime.now(),
-      ),
-    ];
+    final mode = _settings.transferMode;
+    final queue = _ctx.scheduler.buildDataRoundQueue(
+      packetsToSend: toSend,
+      sessionId: _bundle!.session.id,
+    );
 
     _ctx.roundNumber++;
     _transition(TransferPhase.transmitting);
     _stream!.setPackets(queue);
     _stream!.start(
-      framesPerSecond: state.framesPerSecond,
+      framesPerSecond: mode.framesPerSecond,
       onFrame: (data, index, total) {
         if (index < toSend.length) {
           _ctx.diagnostics.recordSent();
+          if (index < toSend.length) {
+            _ctx.diagnostics.recordBytes(toSend[index].payload.length);
+            _ctx.throughput.recordBytes(toSend[index].payload.length);
+          }
         }
         state = state.copyWith(
           currentFrameData: data,
@@ -234,6 +319,7 @@ class SenderController extends Notifier<SenderTransferState> {
           totalFrames: total,
           missingCount: missing.length,
           roundNumber: _ctx.roundNumber,
+          framesPerSecond: mode.framesPerSecond,
         );
       },
     );
@@ -256,13 +342,11 @@ class SenderController extends Notifier<SenderTransferState> {
     _syncState();
   }
 
-  /// Manual: sender finished data round, await receiver feedback.
   void finishRoundAndAwaitAck() {
     _stream?.stop();
     _showEndOfRoundAndAwaitAck();
   }
 
-  /// Manual: start sending data after metadata (skip waiting for scan).
   void beginDataTransfer() => _beginDataRound();
 
   Future<void> _completeSuccess() async {
@@ -271,10 +355,15 @@ class SenderController extends Notifier<SenderTransferState> {
     _stream?.stop();
     _transition(TransferPhase.completed);
     _ctx.diagnostics.markCompleted();
-    await _updateHistoryStatus(TransferStatus.success);
+    final snap = _ctx.throughput.snapshot();
+    await _updateHistoryStatus(
+      TransferStatus.success,
+      transferSpeed: snap.averageBytesPerSec,
+    );
     if (_bundle != null) {
       await _persistence.remove(_bundle!.session.id);
     }
+    _ctx.keyProvider.clear();
     state = state.copyWith(
       diagnostics: _ctx.diagnostics.snapshot,
       missingCount: 0,
@@ -303,6 +392,7 @@ class SenderController extends Notifier<SenderTransferState> {
     _stream?.stop();
     _transition(TransferPhase.cancelled);
     await _updateHistoryStatus(TransferStatus.cancelled);
+    _ctx.keyProvider.clear();
     _syncState();
   }
 
@@ -316,7 +406,7 @@ class SenderController extends Notifier<SenderTransferState> {
   Future<void> resumeTransfer() async {
     if (_bundle == null) return;
     _transition(TransferPhase.resuming);
-    _beginMetadataBroadcast();
+    _beginSetupAndMetadataBroadcast();
   }
 
   Future<void> checkResumableSession() async {
@@ -387,6 +477,7 @@ class SenderController extends Notifier<SenderTransferState> {
     _ctx.diagnostics.markFailed(message);
     _transition(TransferPhase.failed);
     unawaited(_updateHistoryStatus(TransferStatus.failed));
+    _ctx.keyProvider.clear();
     state = state.copyWith(
       phase: TransferPhase.failed,
       errorMessage: message,
@@ -394,7 +485,10 @@ class SenderController extends Notifier<SenderTransferState> {
     );
   }
 
-  Future<void> _updateHistoryStatus(TransferStatus status) async {
+  Future<void> _updateHistoryStatus(
+    TransferStatus status, {
+    double? transferSpeed,
+  }) async {
     final id = state.historyRecordId;
     if (id == null) return;
     final diag = _ctx.diagnostics.snapshot;
@@ -404,6 +498,8 @@ class SenderController extends Notifier<SenderTransferState> {
           retryCount: diag.retries,
           durationMs: diag.durationMs,
           failureReason: diag.failureReason,
+          transferSpeedBytesPerSec: transferSpeed ?? diag.transferSpeedBytesPerSec,
+          compressionRatio: state.compressionRatio,
         );
     ref.invalidate(historyProvider);
   }

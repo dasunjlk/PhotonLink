@@ -54,6 +54,35 @@ class DiagnosticsCollectorImpl implements DiagnosticsCollector {
   }
 
   @override
+  void recordAck() {
+    _data = _data.copyWith(ackCount: _data.ackCount + 1);
+  }
+
+  @override
+  void recordNak() {
+    _data = _data.copyWith(nakCount: _data.nakCount + 1);
+  }
+
+  @override
+  void recordBytes(int bytes) {
+    _bytesTransferred += bytes;
+    _refreshTiming();
+  }
+
+  @override
+  void setCompressionStats({required int savingsBytes, required double ratio}) {
+    _data = _data.copyWith(
+      compressionSavingsBytes: savingsBytes,
+      compressionRatio: ratio,
+    );
+  }
+
+  @override
+  void setEncryptionUsed(bool used) {
+    _data = _data.copyWith(encryptionUsed: used);
+  }
+
+  @override
   void updateProgress(double fraction) {
     _data = _data.copyWith(progress: fraction.clamp(0, 1));
     _updateEta(fraction);
@@ -77,11 +106,6 @@ class DiagnosticsCollectorImpl implements DiagnosticsCollector {
     _refreshTiming();
   }
 
-  void recordBytes(int bytes) {
-    _bytesTransferred += bytes;
-    _refreshTiming();
-  }
-
   void _refreshTiming() {
     if (_startedAt == null) return;
     final elapsed = DateTime.now().difference(_startedAt!).inMilliseconds;
@@ -91,6 +115,7 @@ class DiagnosticsCollectorImpl implements DiagnosticsCollector {
     _data = _data.copyWith(
       durationMs: elapsed,
       throughputBytesPerSec: throughput,
+      transferSpeedBytesPerSec: throughput,
     );
   }
 

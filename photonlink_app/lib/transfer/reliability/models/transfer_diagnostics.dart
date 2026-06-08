@@ -14,6 +14,12 @@ class TransferDiagnostics {
     this.failureReason,
     this.startedAt,
     this.completedAt,
+    this.ackCount = 0,
+    this.nakCount = 0,
+    this.compressionSavingsBytes = 0,
+    this.compressionRatio = 1,
+    this.encryptionUsed = false,
+    this.transferSpeedBytesPerSec = 0,
   });
 
   final int packetsSent;
@@ -29,6 +35,12 @@ class TransferDiagnostics {
   final String? failureReason;
   final DateTime? startedAt;
   final DateTime? completedAt;
+  final int ackCount;
+  final int nakCount;
+  final int compressionSavingsBytes;
+  final double compressionRatio;
+  final bool encryptionUsed;
+  final double transferSpeedBytesPerSec;
 
   TransferDiagnostics copyWith({
     int? packetsSent,
@@ -44,6 +56,12 @@ class TransferDiagnostics {
     String? failureReason,
     DateTime? startedAt,
     DateTime? completedAt,
+    int? ackCount,
+    int? nakCount,
+    int? compressionSavingsBytes,
+    double? compressionRatio,
+    bool? encryptionUsed,
+    double? transferSpeedBytesPerSec,
   }) {
     return TransferDiagnostics(
       packetsSent: packetsSent ?? this.packetsSent,
@@ -60,6 +78,14 @@ class TransferDiagnostics {
       failureReason: failureReason ?? this.failureReason,
       startedAt: startedAt ?? this.startedAt,
       completedAt: completedAt ?? this.completedAt,
+      ackCount: ackCount ?? this.ackCount,
+      nakCount: nakCount ?? this.nakCount,
+      compressionSavingsBytes:
+          compressionSavingsBytes ?? this.compressionSavingsBytes,
+      compressionRatio: compressionRatio ?? this.compressionRatio,
+      encryptionUsed: encryptionUsed ?? this.encryptionUsed,
+      transferSpeedBytesPerSec:
+          transferSpeedBytesPerSec ?? this.transferSpeedBytesPerSec,
     );
   }
 
@@ -78,6 +104,12 @@ class TransferDiagnostics {
         if (failureReason != null) 'failureReason': failureReason,
         if (startedAt != null) 'startedAt': startedAt!.toIso8601String(),
         if (completedAt != null) 'completedAt': completedAt!.toIso8601String(),
+        'ackCount': ackCount,
+        'nakCount': nakCount,
+        'compressionSavingsBytes': compressionSavingsBytes,
+        'compressionRatio': compressionRatio,
+        'encryptionUsed': encryptionUsed,
+        'transferSpeedBytesPerSec': transferSpeedBytesPerSec,
       };
 
   factory TransferDiagnostics.fromJson(Map<String, dynamic> json) {
@@ -100,6 +132,13 @@ class TransferDiagnostics {
       completedAt: json['completedAt'] != null
           ? DateTime.parse(json['completedAt'] as String)
           : null,
+      ackCount: json['ackCount'] as int? ?? 0,
+      nakCount: json['nakCount'] as int? ?? 0,
+      compressionSavingsBytes: json['compressionSavingsBytes'] as int? ?? 0,
+      compressionRatio: (json['compressionRatio'] as num?)?.toDouble() ?? 1,
+      encryptionUsed: json['encryptionUsed'] as bool? ?? false,
+      transferSpeedBytesPerSec:
+          (json['transferSpeedBytesPerSec'] as num?)?.toDouble() ?? 0,
     );
   }
 }

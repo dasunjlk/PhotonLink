@@ -7,6 +7,7 @@ import '../../shared/widgets/gradient_scaffold.dart';
 import '../../shared/widgets/section_header.dart';
 import '../../shared/widgets/staggered_reveal.dart';
 import '../../ui/spacing.dart';
+import '../../transfer/scheduler/transfer_mode.dart';
 import '../application/settings_controller.dart';
 
 /// Settings screen with theme, transfer, and camera preference placeholders.
@@ -58,9 +59,9 @@ class SettingsScreen extends ConsumerWidget {
                   child: Column(
                     children: [
                       SwitchListTile(
-                        title: const Text('Compression'),
+                        title: const Text('Compression (GZip)'),
                         subtitle: const Text(
-                          'Compress files before transmission (Phase 2)',
+                          'Compress before packetization (LZ4 placeholder disabled)',
                         ),
                         value: settings.compressionEnabled,
                         onChanged: controller.toggleCompression,
@@ -69,10 +70,37 @@ class SettingsScreen extends ConsumerWidget {
                       SwitchListTile(
                         title: const Text('Encryption'),
                         subtitle: const Text(
-                          'Encrypt data during transfer (Phase 2)',
+                          'ChaCha20-Poly1305 — session key in setup QR',
                         ),
                         value: settings.encryptionEnabled,
                         onChanged: controller.toggleEncryption,
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        title: const Text('Transfer mode'),
+                        subtitle: Text(settings.transferMode.id),
+                        trailing: DropdownButton<TransferMode>(
+                          value: settings.transferMode,
+                          underline: const SizedBox.shrink(),
+                          items: TransferMode.values
+                              .map(
+                                (m) => DropdownMenuItem(
+                                  value: m,
+                                  child: Text(m.id),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (m) {
+                            if (m != null) controller.updateTransferMode(m);
+                          },
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      SwitchListTile(
+                        title: const Text('Diagnostics'),
+                        subtitle: const Text('Show live transfer metrics'),
+                        value: settings.diagnosticsEnabled,
+                        onChanged: controller.toggleDiagnostics,
                       ),
                     ],
                   ),

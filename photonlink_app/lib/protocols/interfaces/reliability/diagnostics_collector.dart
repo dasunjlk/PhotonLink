@@ -18,6 +18,16 @@ abstract interface class DiagnosticsCollector {
 
   void recordMissing(int count);
 
+  void recordAck();
+
+  void recordNak();
+
+  void recordBytes(int bytes);
+
+  void setCompressionStats({required int savingsBytes, required double ratio});
+
+  void setEncryptionUsed(bool used);
+
   void updateProgress(double fraction);
 
   void markCompleted();

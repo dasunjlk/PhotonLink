@@ -2,7 +2,7 @@
 
 ## Overview
 
-PhotonLink is an offline peer-to-peer file transfer platform using optical communication (QR codes, color matrices, visual frame streams). **Phase 3** adds a **transport-agnostic reliability layer** (ACK/NAK, missing-packet recovery, retry, session resume) and a **round-based bidirectional QR protocol** where each device alternates between displaying and scanning QR frames.
+PhotonLink is an offline peer-to-peer file transfer platform using optical communication (QR codes, color matrices, visual frame streams). **Phase 4** adds **compression, encryption, scheduling, and throughput monitoring** on top of the Phase 3 reliable bidirectional QR transport. All efficiency/security modules are **transport-agnostic**.
 
 ## Layer Diagram
 
@@ -11,12 +11,12 @@ PhotonLink is an offline peer-to-peer file transfer platform using optical commu
 │  features/  home · transfer_setup · qr_transfer · about   │
 │             camera_scan · file_picker (non-QR prototypes)  │
 ├──────────────────────────────────────────────────────────┤
-│  transfer/  core (chunking, reconstruction, integrity)   │
-│             reliability (ACK/NAK/retry/diagnostics)      │
-│             state (13-phase state machine)               │
-│             persistence (chunk store, session index)     │
-│             qr (frame codec, stream + status frames)     │
-│             application (Riverpod controllers)           │
+│  transfer/  core (chunking, payload pipeline, integrity) │
+│             compression · encryption · security        │
+│             scheduler · metrics (throughput)           │
+│             reliability · state · persistence          │
+│             qr (PL2 codec, stream)                     │
+│             application (Riverpod controllers)         │
 ├──────────────────────────────────────────────────────────┤
 │  protocols/ interfaces + reliability/ + impl (QrProtocol)│
 │  settings/  │  history/  │  shared/widgets/  │  ui/       │
@@ -46,7 +46,40 @@ PhotonLink is an offline peer-to-peer file transfer platform using optical commu
 | `transfer/application/` | `transfer/*`, `history/`, `services/` | widgets |
 | `features/` | all above | — |
 
-**Key rule:** Color Matrix, Optical Stream, and Audio (Phase 4+) reuse `transfer/core/`, `transfer/reliability/`, and `protocols/interfaces/` without importing `transfer/qr/`.
+**Key rule:** Color Matrix, Optical Stream, and Audio (Phase 5+) reuse `transfer/core/`, `transfer/compression/`, `transfer/encryption/`, `transfer/reliability/`, and `protocols/interfaces/` without importing `transfer/qr/`.
+
+## Phase 4 — Efficiency pipeline
+
+```mermaid
+flowchart LR
+  file[File bytes] --> compress[GZip optional]
+  compress --> encrypt[ChaCha20-Poly1305 optional]
+  encrypt --> hash[Wire SHA-256]
+  hash --> chunk[ChunkingEngine]
+  chunk --> pl2[PL2 QR frames]
+```
+
+Receiver: reconstruct wire → verify wire hash → decrypt → decompress → verify original hash → save plaintext.
+
+## Phase 4 modules
+
+| Module | Path | Role |
+|--------|------|------|
+| CompressionManager | `transfer/compression/` | GZip active; LZ4 placeholder |
+| EncryptionManager | `transfer/encryption/` | ChaCha20-Poly1305 AEAD |
+| KeyExchange | `transfer/security/` | Setup QR session key (future ECDH) |
+| PayloadPipeline | `transfer/core/payload_pipeline.dart` | Pre/post transform orchestration |
+| TransferScheduler | `transfer/scheduler/` | Normal vs performance FPS |
+| ThroughputMonitor | `transfer/metrics/` | Bytes/sec, compression ratio |
+| PerformanceDiagnostics | `transfer/metrics/performance_diagnostics.dart` | Exportable report |
+
+## Packet versioning (protocol v2)
+
+- `SessionSetupPacket` — type `S`, key exchange payload
+- `MetadataPacket` — `protocolVersion`, `compression`, `encryption`, `originalSize`, `originalSha256`
+- ACK/NAK/Handshake — range-encoded IDs (`0-3,7`)
+
+See [SECURITY.md](SECURITY.md) and [PHASE4_BENCHMARKS.md](PHASE4_BENCHMARKS.md).
 
 ## Bidirectional QR Protocol (Phase 3)
 

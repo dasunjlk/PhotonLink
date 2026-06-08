@@ -14,7 +14,7 @@ void main() {
     final factory = SessionFactory(chunkManager: engine);
     final bytes = Uint8List.fromList(List.generate(300, (i) => i % 256));
 
-    final bundle = factory.prepareSenderSession(
+    final bundle = factory.prepareSenderSessionFromFile(
       fileBytes: bytes,
       fileName: 'r.bin',
       mimeType: 'application/octet-stream',

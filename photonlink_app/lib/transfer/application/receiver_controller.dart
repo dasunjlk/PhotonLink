@@ -4,12 +4,16 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../core/constants.dart';
 import '../../history/application/history_controller.dart';
 import '../../history/domain/transfer_record.dart';
+import '../../protocols/interfaces/compression_type.dart';
+import '../../protocols/interfaces/encryption_mode.dart';
 import '../../protocols/interfaces/transfer_packet.dart';
 import '../../protocols/interfaces/transfer_session.dart';
 import '../../protocols/transfer_method.dart';
 import '../core/integrity_verifier.dart';
+import '../core/payload_pipeline.dart';
 import '../core/transfer_limits.dart';
 import '../persistence/session_persistence_manager_impl.dart';
 import '../qr/qr_frame_codec.dart';
@@ -19,7 +23,7 @@ import 'reliable_transfer_context.dart';
 import 'transfer_providers.dart';
 import 'transfer_state.dart';
 
-/// Round-based bidirectional QR receiver with ACK/NAK recovery.
+/// Round-based bidirectional QR receiver with ACK/NAK + Phase 4 transforms.
 class ReceiverController extends Notifier<ReceiverTransferState> {
   late ReliableTransferContext _ctx;
   QrStreamController? _statusStream;
@@ -33,6 +37,7 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
     return const ReceiverTransferState();
   }
 
+  PayloadPipeline get _pipeline => ref.read(payloadPipelineProvider);
   QrFrameCodec get _codec => ref.read(qrFrameCodecProvider);
   IntegrityVerifier get _verifier => ref.read(integrityVerifierProvider);
   SessionPersistenceManagerImpl get _persistence =>
@@ -42,7 +47,7 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
     _ctx.reset();
     _statusStream = QrStreamController();
     _transition(TransferPhase.waitingForReceiver);
-    _syncState(statusMessage: 'Scan sender metadata QR');
+    _syncState(statusMessage: 'Scan sender setup or metadata QR');
   }
 
   void onFrameScanned(String raw) {
@@ -57,14 +62,37 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
     if (packet == null) return;
 
     switch (packet) {
+      case SessionSetupPacket setup:
+        unawaited(_handleSetup(setup));
       case MetadataPacket metadata:
         _handleMetadata(metadata);
       case DataPacket data:
-        _handleData(data);
+        unawaited(_handleData(data));
       case ControlPacket control:
         _handleControl(control);
       default:
         break;
+    }
+  }
+
+  Future<void> _handleSetup(SessionSetupPacket setup) async {
+    try {
+      if (setup.encryption == EncryptionMode.enabled) {
+        final key = await _ctx.keyExchange.acceptFromReceiver(
+          setup.keyExchangePayload,
+        );
+        _ctx.keyProvider.setSessionKey(key);
+      }
+      _ctx.setupPacket = setup;
+      state = state.copyWith(
+        compression: setup.compression,
+        encryption: setup.encryption,
+        statusMessage: 'Session key received — scan metadata',
+      );
+    } catch (e) {
+      state = state.copyWith(
+        statusMessage: 'Invalid setup packet: $e',
+      );
     }
   }
 
@@ -79,9 +107,32 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
     } catch (_) {
       return;
     }
+    if (metadata.encryption == EncryptionMode.enabled &&
+        !_ctx.keyProvider.hasKey) {
+      state = state.copyWith(
+        statusMessage: 'Scan session setup QR first (encryption enabled)',
+      );
+      return;
+    }
     _ctx.bindSession(metadata);
     _transition(TransferPhase.receiving);
-    _syncState(statusMessage: 'Receiving data frames…');
+    final savings = (metadata.originalSize ?? metadata.fileSize) -
+        metadata.fileSize;
+    _ctx.diagnostics.setCompressionStats(
+      savingsBytes: savings > 0 ? savings : 0,
+      ratio: metadata.originalSize != null && metadata.originalSize! > 0
+          ? metadata.fileSize / metadata.originalSize!
+          : 1,
+    );
+    _syncState(
+      statusMessage: 'Receiving data frames…',
+      compression: metadata.compression,
+      encryption: metadata.encryption,
+      compressionRatio: metadata.originalSize != null && metadata.originalSize! > 0
+          ? metadata.fileSize / metadata.originalSize!
+          : 1,
+      compressionSavingsBytes: savings > 0 ? savings : 0,
+    );
     unawaited(_persist());
   }
 
@@ -98,6 +149,8 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
       _ctx.diagnostics.recordDuplicate();
     } else {
       _ctx.diagnostics.recordReceived();
+      _ctx.diagnostics.recordBytes(data.payload.length);
+      _ctx.throughput.recordBytes(data.payload.length);
       await _ctx.chunkStore.saveChunk(
         sessionId: data.sessionId,
         chunkId: data.chunkId,
@@ -118,68 +171,33 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
       diagnostics: _ctx.diagnostics.snapshot,
       missingCount: _ctx.tracker.missingIds.length,
     );
-
-    unawaited(_persist());
-
-    if (_ctx.tracker.isComplete) {
-      await _finalizeTransfer();
-    }
   }
 
   void _handleControl(ControlPacket control) {
-    if (_ctx.metadata == null ||
-        control.sessionId != _ctx.metadata!.sessionId) {
-      return;
-    }
-    if (control.type == ControlType.endOfRound) {
-      _onEndOfRound();
-    } else if (control.type == ControlType.pause) {
-      _transition(TransferPhase.paused);
-      _syncState(statusMessage: 'Transfer paused');
-    }
-  }
-
-  void _onEndOfRound() {
     if (_ctx.metadata == null) return;
-    if (_ctx.tracker.isComplete) {
-      unawaited(_finalizeTransfer());
-      return;
+    if (control.sessionId != _ctx.metadata!.sessionId) return;
+    if (control.type == ControlType.endOfRound) {
+      unawaited(_showStatusToSender());
     }
-    _showStatusToSender();
   }
 
-  /// Display NAK or ACK QR for sender to scan.
-  void showStatusToSender() => _showStatusToSender();
-
-  void _showStatusToSender() {
+  Future<void> _showStatusToSender() async {
     if (_ctx.metadata == null || _statusStream == null) return;
-
-    TransferPacket status;
-    String message;
     if (_ctx.tracker.isComplete) {
-      status = _ctx.buildFullAck();
-      message = 'Show ACK QR to sender';
-      _transition(TransferPhase.awaitingAcknowledgements);
-    } else {
-      status = _ctx.buildNak();
-      message = 'Show NAK QR (${_ctx.tracker.missingIds.length} missing)';
-      _transition(TransferPhase.recoveringMissingPackets);
+      await _finalizeTransfer();
+      return;
     }
-
-    _statusStream!.showStatusFrame(
-      status,
-      framesPerSecond: 2,
-    );
+    final nak = _ctx.buildNak();
+    _statusStream!.showStatusFrame(nak);
+    _transition(TransferPhase.awaitingAcknowledgements);
     state = state.copyWith(
       currentFrameData: _statusStream!.currentFrameData,
-      statusMessage: message,
-      missingCount: _ctx.tracker.missingIds.length,
-      diagnostics: _ctx.diagnostics.snapshot,
+      statusMessage: 'Show NAK QR to sender (${_ctx.tracker.missingIds.length} missing)',
     );
-    _syncState(statusMessage: message);
   }
 
-  /// Receiver shows handshake QR for sender to scan (resume).
+  void showStatusToSender() => unawaited(_showStatusToSender());
+
   void showHandshakeToSender() {
     if (_ctx.metadata == null || _statusStream == null) return;
     final hs = _ctx.buildHandshake();
@@ -223,26 +241,50 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
       return;
     }
     if (rebuilt.length != metadata.fileSize) {
-      await _fail('Reconstructed size mismatch');
+      await _fail('Reconstructed wire size mismatch');
       return;
     }
     if (!_verifier.verify(rebuilt, metadata.sha256)) {
-      await _fail('SHA-256 integrity check failed');
+      await _fail('Wire payload SHA-256 check failed');
       return;
     }
 
     try {
+      final plain = await _pipeline.restorePlaintext(
+        wireBytes: rebuilt,
+        meta: MetadataPacketFields(
+          compression: metadata.compression,
+          encryption: metadata.encryption,
+          originalSize: metadata.originalSize,
+          originalSha256: metadata.originalSha256,
+        ),
+        keyProvider: _ctx.keyProvider,
+      );
+
+      final expectedSize = metadata.originalSize ?? metadata.fileSize;
+      final expectedHash =
+          metadata.originalSha256 ?? metadata.sha256;
+      if (plain.length != expectedSize) {
+        await _fail('Plaintext size mismatch after decompress');
+        return;
+      }
+      if (!_verifier.verify(plain, expectedHash)) {
+        await _fail('Original file SHA-256 check failed');
+        return;
+      }
+
       final dir = await getApplicationDocumentsDirectory();
       final safeName =
           metadata.fileName.replaceAll(RegExp(r'[^\w.\-]'), '_');
       final outputPath = '${dir.path}/$safeName';
-      await File(outputPath).writeAsBytes(rebuilt);
+      await File(outputPath).writeAsBytes(plain);
 
       await _ctx.chunkStore.removeSession(metadata.sessionId);
       await _persistence.remove(metadata.sessionId);
 
       _ctx.diagnostics.markCompleted();
       final diag = _ctx.diagnostics.snapshot;
+      final snap = _ctx.throughput.snapshot();
 
       await ref.read(historyRepositoryProvider).addRecord(
             TransferRecord(
@@ -250,12 +292,19 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
               sessionId: metadata.sessionId,
               fileName: metadata.fileName,
               method: TransferMethod.qr,
-              sizeBytes: metadata.fileSize,
+              sizeBytes: expectedSize,
               status: TransferStatus.success,
               timestamp: DateTime.now(),
               direction: TransferDirection.received,
               retryCount: diag.retries,
               durationMs: diag.durationMs,
+              compressionUsed:
+                  metadata.compression != CompressionType.none,
+              encryptionUsed:
+                  metadata.encryption == EncryptionMode.enabled,
+              compressionRatio: state.compressionRatio,
+              transferSpeedBytesPerSec: snap.averageBytesPerSec,
+              protocolVersion: metadata.protocolVersion,
             ),
           );
       ref.invalidate(historyProvider);
@@ -268,12 +317,14 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
         ),
       );
 
+      _ctx.keyProvider.clear();
       _transition(TransferPhase.completed);
       state = ReceiverTransferState(
         phase: TransferPhase.completed,
         session: TransferSession.fromMetadata(metadata).copyWith(
           state: TransferSessionState.completed,
           progress: 1,
+          fileSize: expectedSize,
         ),
         receivedChunks: metadata.totalChunks,
         totalChunks: metadata.totalChunks,
@@ -282,11 +333,15 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
         integrityValid: true,
         duplicatesIgnored: _ctx.tracker.duplicateCount,
         diagnostics: diag,
+        compression: metadata.compression,
+        encryption: metadata.encryption,
+        compressionRatio: state.compressionRatio,
+        compressionSavingsBytes: state.compressionSavingsBytes,
         currentFrameData: _statusStream?.currentFrameData,
         statusMessage: 'Transfer complete — show to sender',
       );
     } catch (e) {
-      await _fail('Failed to save file: $e');
+      await _fail('Failed to restore file: $e');
     }
   }
 
@@ -300,16 +355,18 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
               sessionId: metadata.sessionId,
               fileName: metadata.fileName,
               method: TransferMethod.qr,
-              sizeBytes: metadata.fileSize,
+              sizeBytes: metadata.originalSize ?? metadata.fileSize,
               status: TransferStatus.failed,
               timestamp: DateTime.now(),
               direction: TransferDirection.received,
               failureReason: message,
               durationMs: _ctx.diagnostics.snapshot.durationMs,
+              protocolVersion: metadata.protocolVersion,
             ),
           );
       ref.invalidate(historyProvider);
     }
+    _ctx.keyProvider.clear();
     _transition(TransferPhase.failed);
     state = state.copyWith(
       phase: TransferPhase.failed,
@@ -361,6 +418,7 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
       totalChunks: persisted.totalChunks,
       sha256: persisted.sha256,
       mimeType: persisted.mimeType,
+      protocolVersion: AppConstants.protocolVersion,
     );
     _ctx.bindSession(meta);
     for (final id in persisted.receivedChunkIds) {
@@ -405,11 +463,21 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
     }
   }
 
-  void _syncState({String? statusMessage}) {
+  void _syncState({
+    String? statusMessage,
+    CompressionType? compression,
+    EncryptionMode? encryption,
+    double? compressionRatio,
+    int? compressionSavingsBytes,
+  }) {
     state = state.copyWith(
       phase: _ctx.stateMachine.phase,
       diagnostics: _ctx.diagnostics.snapshot,
       statusMessage: statusMessage,
+      compression: compression,
+      encryption: encryption,
+      compressionRatio: compressionRatio,
+      compressionSavingsBytes: compressionSavingsBytes,
     );
   }
 

@@ -1,10 +1,31 @@
 import 'dart:typed_data';
 
+import 'compression_type.dart';
+import 'encryption_mode.dart';
+
 /// Transport-agnostic packet types for optical file transfer.
 sealed class TransferPacket {
   const TransferPacket({required this.sessionId});
 
   final String sessionId;
+}
+
+/// Session setup with key exchange payload (before metadata).
+final class SessionSetupPacket extends TransferPacket {
+  const SessionSetupPacket({
+    required super.sessionId,
+    required this.protocolVersion,
+    required this.keyExchangePayload,
+    required this.compression,
+    required this.encryption,
+    required this.timestamp,
+  });
+
+  final int protocolVersion;
+  final String keyExchangePayload;
+  final CompressionType compression;
+  final EncryptionMode encryption;
+  final DateTime timestamp;
 }
 
 /// Session metadata broadcast before data chunks.
@@ -16,13 +37,27 @@ final class MetadataPacket extends TransferPacket {
     required this.totalChunks,
     required this.sha256,
     required this.mimeType,
+    this.protocolVersion = 1,
+    this.compression = CompressionType.none,
+    this.encryption = EncryptionMode.disabled,
+    this.originalSize,
+    this.originalSha256,
   });
 
   final String fileName;
+  /// Wire payload size (after compress/encrypt).
   final int fileSize;
   final int totalChunks;
+  /// SHA-256 of wire payload.
   final String sha256;
   final String mimeType;
+  final int protocolVersion;
+  final CompressionType compression;
+  final EncryptionMode encryption;
+  /// Original plaintext size before transforms.
+  final int? originalSize;
+  /// SHA-256 of original plaintext (optional for v1 compat).
+  final String? originalSha256;
 }
 
 /// A single file chunk payload.

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../protocols/interfaces/compression_type.dart';
+import '../../../protocols/interfaces/encryption_mode.dart';
 import '../../../transfer/reliability/models/transfer_diagnostics.dart';
 import '../../../ui/spacing.dart';
 import 'transfer_progress_bar.dart';
@@ -12,6 +14,10 @@ class DiagnosticsPanel extends StatelessWidget {
     required this.progressLabel,
     this.accentColor,
     this.missingCount = 0,
+    this.compression = CompressionType.none,
+    this.encryption = EncryptionMode.disabled,
+    this.compressionSavingsBytes = 0,
+    this.showExtended = true,
     super.key,
   });
 
@@ -20,10 +26,17 @@ class DiagnosticsPanel extends StatelessWidget {
   final String progressLabel;
   final Color? accentColor;
   final int missingCount;
+  final CompressionType compression;
+  final EncryptionMode encryption;
+  final int compressionSavingsBytes;
+  final bool showExtended;
 
   String _formatSpeed(double bytesPerSec) {
-    if (bytesPerSec < 1024) return '${bytesPerSec.toStringAsFixed(0)} B/s';
-    return '${(bytesPerSec / 1024).toStringAsFixed(1)} KB/s';
+    final speed = diagnostics.transferSpeedBytesPerSec > 0
+        ? diagnostics.transferSpeedBytesPerSec
+        : bytesPerSec;
+    if (speed < 1024) return '${speed.toStringAsFixed(0)} B/s';
+    return '${(speed / 1024).toStringAsFixed(1)} KB/s';
   }
 
   String _formatEta(int? ms) {
@@ -46,7 +59,21 @@ class DiagnosticsPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Transfer Diagnostics', style: theme.textTheme.titleSmall),
+          Row(
+            children: [
+              Text('Transfer Diagnostics', style: theme.textTheme.titleSmall),
+              const Spacer(),
+              _chip(
+                compression == CompressionType.none ? 'No compress' : compression.id,
+                theme,
+              ),
+              const SizedBox(width: 4),
+              _chip(
+                encryption == EncryptionMode.enabled ? 'Encrypted' : 'No encrypt',
+                theme,
+              ),
+            ],
+          ),
           const SizedBox(height: AppSpacing.sm),
           TransferProgressBar(
             progress: progress,
@@ -57,13 +84,30 @@ class DiagnosticsPanel extends StatelessWidget {
           _row('Packets sent', '${diagnostics.packetsSent}'),
           _row('Packets received', '${diagnostics.packetsReceived}'),
           _row('Missing', '$missingCount'),
-          _row('Retries', '${diagnostics.retries}'),
-          _row('Duplicates', '${diagnostics.duplicates}'),
-          _row('Speed', _formatSpeed(diagnostics.throughputBytesPerSec)),
-          _row('ETA', _formatEta(diagnostics.estimatedRemainingMs)),
-          _row('Duration', '${diagnostics.durationMs} ms'),
+          if (showExtended) ...[
+            _row('ACK rounds', '${diagnostics.ackCount}'),
+            _row('NAK rounds', '${diagnostics.nakCount}'),
+            _row('Retries', '${diagnostics.retries}'),
+            _row('Duplicates', '${diagnostics.duplicates}'),
+            if (compressionSavingsBytes > 0)
+              _row('Compression saved', '$compressionSavingsBytes B'),
+            _row('Speed', _formatSpeed(diagnostics.throughputBytesPerSec)),
+            _row('ETA', _formatEta(diagnostics.estimatedRemainingMs)),
+            _row('Duration', '${diagnostics.durationMs} ms'),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _chip(String label, ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(label, style: theme.textTheme.labelSmall),
     );
   }
 

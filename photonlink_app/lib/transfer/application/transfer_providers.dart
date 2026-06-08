@@ -1,9 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/storage/preferences_service.dart';
+import '../compression/compression_manager.dart';
 import '../core/chunking_engine.dart';
 import '../core/integrity_verifier.dart';
+import '../core/payload_pipeline.dart';
 import '../core/session_factory.dart';
+import '../encryption/encryption_manager.dart';
+import '../metrics/throughput_monitor.dart';
 import '../persistence/received_chunk_store.dart';
 import '../persistence/session_persistence_manager_impl.dart';
 import '../qr/qr_frame_codec.dart';
@@ -12,6 +16,9 @@ import '../reliability/diagnostics_collector_impl.dart';
 import '../reliability/missing_packet_tracker_impl.dart';
 import '../reliability/retry_manager_impl.dart';
 import '../reliability/transfer_recovery_manager_impl.dart';
+import '../scheduler/transfer_scheduler.dart';
+import '../security/encryption_key_provider.dart';
+import '../security/session_key_exchange.dart';
 import 'receiver_controller.dart';
 import 'sender_controller.dart';
 import 'transfer_state.dart';
@@ -22,6 +29,22 @@ final chunkingEngineProvider = Provider<ChunkingEngine>(
 
 final integrityVerifierProvider = Provider<IntegrityVerifier>(
   (ref) => const IntegrityVerifier(),
+);
+
+final compressionManagerProvider = Provider<CompressionManager>(
+  (ref) => CompressionManager(),
+);
+
+final encryptionManagerProvider = Provider<EncryptionManager>(
+  (ref) => EncryptionManager(),
+);
+
+final payloadPipelineProvider = Provider<PayloadPipeline>(
+  (ref) => PayloadPipeline(
+    compressionManager: ref.watch(compressionManagerProvider),
+    encryptionManager: ref.watch(encryptionManagerProvider),
+    integrityVerifier: ref.watch(integrityVerifierProvider),
+  ),
 );
 
 final sessionFactoryProvider = Provider<SessionFactory>(
@@ -63,6 +86,22 @@ final sessionPersistenceManagerProvider =
     Provider<SessionPersistenceManagerImpl>((ref) {
   return SessionPersistenceManagerImpl(ref.watch(preferencesServiceProvider));
 });
+
+final transferSchedulerProvider = Provider<TransferScheduler>(
+  (ref) => const TransferScheduler(),
+);
+
+final throughputMonitorProvider = Provider<ThroughputMonitor>(
+  (ref) => ThroughputMonitor(),
+);
+
+final encryptionKeyProviderProvider = Provider<EncryptionKeyProvider>(
+  (ref) => EncryptionKeyProvider(),
+);
+
+final sessionKeyExchangeProvider = Provider<SessionKeyExchange>(
+  (ref) => SessionKeyExchange(),
+);
 
 final senderControllerProvider =
     NotifierProvider<SenderController, SenderTransferState>(

@@ -138,6 +138,9 @@ class _QrReceiverScreenState extends ConsumerState<QrReceiverScreen> {
                       '${state.receivedChunks}/${state.totalChunks} chunks',
                   accentColor: accent,
                   missingCount: state.missingCount,
+                  compression: state.compression,
+                  encryption: state.encryption,
+                  compressionSavingsBytes: state.compressionSavingsBytes,
                 ),
                 if (state.statusMessage != null)
                   Text(

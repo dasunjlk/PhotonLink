@@ -58,6 +58,7 @@ class ReconstructionEngine {
         if (_chunks.containsKey(data.chunkId)) return false;
         _chunks[data.chunkId] = data;
         return true;
+      case SessionSetupPacket():
       case AckPacket():
       case NakPacket():
       case HandshakePacket():

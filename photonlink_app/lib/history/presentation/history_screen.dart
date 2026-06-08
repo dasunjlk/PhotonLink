@@ -184,9 +184,20 @@ class _HistoryTile extends StatelessWidget {
           children: [
             Text('Session: ${record.sessionId ?? '—'}'),
             Text('Method: ${record.method.displayName}'),
+            Text('Protocol v${record.protocolVersion}'),
             Text('Status: ${record.status.label}'),
             Text('Retries: ${record.retryCount}'),
             Text('Duration: ${record.durationMs} ms'),
+            Text('Compression: ${record.compressionUsed ? 'Yes' : 'No'}'),
+            Text('Encryption: ${record.encryptionUsed ? 'Yes' : 'No'}'),
+            if (record.compressionRatio != null)
+              Text(
+                'Compression ratio: ${record.compressionRatio!.toStringAsFixed(2)}',
+              ),
+            if (record.transferSpeedBytesPerSec != null)
+              Text(
+                'Speed: ${record.transferSpeedBytesPerSec!.toStringAsFixed(0)} B/s',
+              ),
             if (record.failureReason != null)
               Text('Failure: ${record.failureReason}'),
           ],

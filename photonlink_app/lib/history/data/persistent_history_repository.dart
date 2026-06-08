@@ -4,14 +4,16 @@ import '../../protocols/transfer_method.dart';
 import '../../services/storage/preferences_service.dart';
 import '../domain/transfer_record.dart';
 
-/// SharedPreferences-backed transfer history repository (v2 schema).
+/// SharedPreferences-backed transfer history (v3 schema with v2 migration).
 class PersistentHistoryRepository {
   PersistentHistoryRepository(this._prefs);
 
   final PreferencesService _prefs;
-  static const _storageKey = 'transfer_history_v2';
+  static const _storageKey = 'transfer_history_v3';
+  static const _legacyV2Key = 'transfer_history_v2';
 
   Future<List<TransferRecord>> fetchAll() async {
+    await _migrateFromV2IfNeeded();
     final raw = _prefs.getString(_storageKey);
     if (raw == null || raw.isEmpty) {
       return _defaultSeedIfEmpty();
@@ -27,6 +29,21 @@ class PersistentHistoryRepository {
     }
   }
 
+  Future<void> _migrateFromV2IfNeeded() async {
+    if (_prefs.getString(_storageKey) != null) return;
+    final v2 = _prefs.getString(_legacyV2Key);
+    if (v2 == null || v2.isEmpty) return;
+    try {
+      final list = jsonDecode(v2) as List<dynamic>;
+      final migrated = list
+          .map((e) => _recordFromJson(e as Map<String, dynamic>))
+          .toList();
+      await _saveAll(migrated);
+    } catch (_) {
+      // ignore corrupt legacy data
+    }
+  }
+
   Future<void> addRecord(TransferRecord record) async {
     final records = await fetchAll();
     records.insert(0, record);
@@ -39,6 +56,8 @@ class PersistentHistoryRepository {
     int? retryCount,
     int? durationMs,
     String? failureReason,
+    double? transferSpeedBytesPerSec,
+    double? compressionRatio,
   }) async {
     final records = await fetchAll();
     final index = records.indexWhere((r) => r.id == id);
@@ -56,14 +75,16 @@ class PersistentHistoryRepository {
       durationMs: durationMs ?? existing.durationMs,
       retryCount: retryCount ?? existing.retryCount,
       failureReason: failureReason ?? existing.failureReason,
+      compressionUsed: existing.compressionUsed,
+      encryptionUsed: existing.encryptionUsed,
+      compressionRatio: compressionRatio ?? existing.compressionRatio,
+      transferSpeedBytesPerSec:
+          transferSpeedBytesPerSec ?? existing.transferSpeedBytesPerSec,
+      protocolVersion: existing.protocolVersion,
     );
     await _saveAll(records);
     return true;
   }
-
-  @Deprecated('Use updateRecord')
-  Future<bool> updateStatus(String id, TransferStatus status) =>
-      updateRecord(id, status: status);
 
   Future<void> clearAll() async {
     await _prefs.setString(_storageKey, '[]');
@@ -92,6 +113,12 @@ class PersistentHistoryRepository {
         'durationMs': r.durationMs,
         'retryCount': r.retryCount,
         if (r.failureReason != null) 'failureReason': r.failureReason,
+        'compressionUsed': r.compressionUsed,
+        'encryptionUsed': r.encryptionUsed,
+        if (r.compressionRatio != null) 'compressionRatio': r.compressionRatio,
+        if (r.transferSpeedBytesPerSec != null)
+          'transferSpeedBytesPerSec': r.transferSpeedBytesPerSec,
+        'protocolVersion': r.protocolVersion,
       };
 
   static TransferRecord _recordFromJson(Map<String, dynamic> json) {
@@ -116,6 +143,12 @@ class PersistentHistoryRepository {
       durationMs: json['durationMs'] as int? ?? 0,
       retryCount: json['retryCount'] as int? ?? 0,
       failureReason: json['failureReason'] as String?,
+      compressionUsed: json['compressionUsed'] as bool? ?? false,
+      encryptionUsed: json['encryptionUsed'] as bool? ?? false,
+      compressionRatio: (json['compressionRatio'] as num?)?.toDouble(),
+      transferSpeedBytesPerSec:
+          (json['transferSpeedBytesPerSec'] as num?)?.toDouble(),
+      protocolVersion: json['protocolVersion'] as int? ?? 1,
     );
   }
 
@@ -129,6 +162,7 @@ class PersistentHistoryRepository {
       timestamp: DateTime.now().subtract(const Duration(days: 1)),
       direction: TransferDirection.received,
       sessionId: 'seed-session',
+      protocolVersion: 2,
     ),
   ];
 }
