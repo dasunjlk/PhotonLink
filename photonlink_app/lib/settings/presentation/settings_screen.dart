@@ -7,6 +7,10 @@ import '../../shared/widgets/gradient_scaffold.dart';
 import '../../shared/widgets/section_header.dart';
 import '../../shared/widgets/staggered_reveal.dart';
 import '../../ui/spacing.dart';
+import '../../transfer/adaptive/adaptive_engine_providers.dart';
+import '../../transfer/adaptive/diagnostics_export.dart';
+import '../../transfer/adaptive/models/transport_profile.dart';
+import '../../transfer/application/transfer_providers.dart';
 import '../../transfer/scheduler/transfer_mode.dart';
 import '../application/settings_controller.dart';
 
@@ -106,6 +110,123 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
+                const SectionHeader(
+                  title: 'Adaptive Engine',
+                  subtitle: 'Phase 6 optical adaptation',
+                ),
+                GlassCard(
+                  child: Column(
+                    children: [
+                      SwitchListTile(
+                        title: const Text('Adaptive Mode'),
+                        subtitle: const Text(
+                          'Automatically tune matrix size, FPS, and density',
+                        ),
+                        value: settings.adaptiveModeEnabled,
+                        onChanged: controller.toggleAdaptiveMode,
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        title: const Text('Aggressiveness'),
+                        subtitle: Text(settings.adaptiveAggressiveness.id),
+                        trailing: DropdownButton<AdaptiveAggressiveness>(
+                          value: settings.adaptiveAggressiveness,
+                          underline: const SizedBox.shrink(),
+                          items: AdaptiveAggressiveness.values
+                              .map(
+                                (a) => DropdownMenuItem(
+                                  value: a,
+                                  child: Text(a.id),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (a) {
+                            if (a != null) {
+                              controller.updateAdaptiveAggressiveness(a);
+                            }
+                          },
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        title: const Text('Profile Override'),
+                        subtitle: Text(settings.profileOverride.id),
+                        trailing: DropdownButton<ProfileOverride>(
+                          value: settings.profileOverride,
+                          underline: const SizedBox.shrink(),
+                          items: ProfileOverride.values
+                              .map(
+                                (p) => DropdownMenuItem(
+                                  value: p,
+                                  child: Text(p.id),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (p) {
+                            if (p != null) controller.updateProfileOverride(p);
+                          },
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      SwitchListTile(
+                        title: const Text('Quality Monitoring'),
+                        subtitle: const Text('Show live quality score overlay'),
+                        value: settings.qualityMonitoringEnabled,
+                        onChanged: controller.toggleQualityMonitoring,
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        title: const Text('Matrix Size (manual)'),
+                        subtitle: Text('${settings.colorMatrixSize}×${settings.colorMatrixSize}'),
+                        trailing: DropdownButton<int>(
+                          value: settings.colorMatrixSize,
+                          underline: const SizedBox.shrink(),
+                          items: const [16, 24, 32, 48]
+                              .map(
+                                (s) => DropdownMenuItem(
+                                  value: s,
+                                  child: Text('$s×$s'),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (s) {
+                            if (s != null) controller.updateColorMatrixSize(s);
+                          },
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        title: const Text('Payload Density'),
+                        subtitle: Text('${settings.colorBitsPerChannel} bits/channel'),
+                        trailing: DropdownButton<int>(
+                          value: settings.colorBitsPerChannel,
+                          underline: const SizedBox.shrink(),
+                          items: const [1, 2, 3]
+                              .map(
+                                (b) => DropdownMenuItem(
+                                  value: b,
+                                  child: Text('$b bpc'),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (b) {
+                            if (b != null) {
+                              controller.updateColorBitsPerChannel(b);
+                            }
+                          },
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.download_rounded),
+                        title: const Text('Export Diagnostics'),
+                        subtitle: const Text('Save adaptive metrics as JSON'),
+                        onTap: () => _exportDiagnostics(context, ref),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
                 const SectionHeader(title: 'Camera'),
                 GlassCard(
                   child: ListTile(
@@ -164,6 +285,29 @@ class SettingsScreen extends ConsumerWidget {
       'de' => 'Deutsch',
       _ => code,
     };
+  }
+
+  Future<void> _exportDiagnostics(BuildContext context, WidgetRef ref) async {
+    final adaptive = ref.read(colorMatrixReceiverAdaptiveProvider);
+    final receiver = ref.read(colorMatrixReceiverControllerProvider);
+    final exporter = DiagnosticsExporter();
+    try {
+      final path = await exporter.exportToFile(
+        adaptation: adaptive.diagnostics,
+        frameDiagnostics: receiver.diagnostics,
+      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Diagnostics exported to $path')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Export failed: $e')),
+        );
+      }
+    }
   }
 
   void _showLanguageDialog(

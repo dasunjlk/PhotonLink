@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/analytics/analytics_dashboard_screen.dart';
 import '../../features/about/about_screen.dart';
 import '../../features/camera_scan/camera_scan_screen.dart';
 import '../../features/file_picker/file_picker_screen.dart';
@@ -27,6 +28,7 @@ abstract final class AppRoutes {
   static const pick = '/pick';
   static const settings = '/settings';
   static const history = '/history';
+  static const analytics = '/analytics';
   static const about = '/about';
   static const qrSend = '/qr/send';
   static const qrReceive = '/qr/receive';
@@ -89,6 +91,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.history,
         name: 'history',
         builder: (context, state) => const HistoryScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.analytics,
+        name: 'analytics',
+        builder: (context, state) => const AnalyticsDashboardScreen(),
       ),
       GoRoute(
         path: AppRoutes.about,

@@ -4,6 +4,10 @@ import '../../protocols/interfaces/compression_type.dart';
 import '../../protocols/interfaces/encryption_mode.dart';
 import '../../protocols/interfaces/reliability/transfer_diagnostics.dart';
 import '../../protocols/interfaces/transfer_session.dart';
+import '../adaptive/adaptive_state.dart';
+import '../adaptive/lighting_compensation_manager.dart';
+import '../adaptive/models/quality_score.dart';
+import '../adaptive/models/transport_profile.dart';
 import 'transfer_state.dart';
 
 export 'transfer_state.dart' show TransferPhase;
@@ -23,6 +27,11 @@ class ColorMatrixSenderState {
     this.diagnostics = const FrameDiagnostics(),
     this.compression = CompressionType.none,
     this.encryption = EncryptionMode.disabled,
+    this.gridSize = 24,
+    this.bitsPerChannel = 2,
+    this.transportProfile = TransportProfile.balanced,
+    this.qualityScore = QualityScore.unknown,
+    this.historyRecordId,
   });
 
   final TransferPhase phase;
@@ -37,6 +46,11 @@ class ColorMatrixSenderState {
   final FrameDiagnostics diagnostics;
   final CompressionType compression;
   final EncryptionMode encryption;
+  final int gridSize;
+  final int bitsPerChannel;
+  final TransportProfile transportProfile;
+  final QualityScore qualityScore;
+  final String? historyRecordId;
 
   ColorMatrixSenderState copyWith({
     TransferPhase? phase,
@@ -51,6 +65,11 @@ class ColorMatrixSenderState {
     FrameDiagnostics? diagnostics,
     CompressionType? compression,
     EncryptionMode? encryption,
+    int? gridSize,
+    int? bitsPerChannel,
+    TransportProfile? transportProfile,
+    QualityScore? qualityScore,
+    String? historyRecordId,
   }) {
     return ColorMatrixSenderState(
       phase: phase ?? this.phase,
@@ -66,6 +85,11 @@ class ColorMatrixSenderState {
       diagnostics: diagnostics ?? this.diagnostics,
       compression: compression ?? this.compression,
       encryption: encryption ?? this.encryption,
+      gridSize: gridSize ?? this.gridSize,
+      bitsPerChannel: bitsPerChannel ?? this.bitsPerChannel,
+      transportProfile: transportProfile ?? this.transportProfile,
+      qualityScore: qualityScore ?? this.qualityScore,
+      historyRecordId: historyRecordId ?? this.historyRecordId,
     );
   }
 }
@@ -85,6 +109,13 @@ class ColorMatrixReceiverState {
     this.diagnostics = const FrameDiagnostics(),
     this.detectionAccuracy = 0.0,
     this.missingChunks = 0,
+    this.qualityScore = QualityScore.unknown,
+    this.lighting = const LightingRecommendation(),
+    this.adaptive = const AdaptiveState(),
+    this.gridSize = 24,
+    this.bitsPerChannel = 2,
+    this.transportProfile = TransportProfile.balanced,
+    this.historyRecordId,
   });
 
   final TransferPhase phase;
@@ -99,6 +130,13 @@ class ColorMatrixReceiverState {
   final FrameDiagnostics diagnostics;
   final double detectionAccuracy;
   final int missingChunks;
+  final QualityScore qualityScore;
+  final LightingRecommendation lighting;
+  final AdaptiveState adaptive;
+  final int gridSize;
+  final int bitsPerChannel;
+  final TransportProfile transportProfile;
+  final String? historyRecordId;
 
   ColorMatrixReceiverState copyWith({
     TransferPhase? phase,
@@ -113,6 +151,13 @@ class ColorMatrixReceiverState {
     FrameDiagnostics? diagnostics,
     double? detectionAccuracy,
     int? missingChunks,
+    QualityScore? qualityScore,
+    LightingRecommendation? lighting,
+    AdaptiveState? adaptive,
+    int? gridSize,
+    int? bitsPerChannel,
+    TransportProfile? transportProfile,
+    String? historyRecordId,
   }) {
     return ColorMatrixReceiverState(
       phase: phase ?? this.phase,
@@ -127,6 +172,13 @@ class ColorMatrixReceiverState {
       diagnostics: diagnostics ?? this.diagnostics,
       detectionAccuracy: detectionAccuracy ?? this.detectionAccuracy,
       missingChunks: missingChunks ?? this.missingChunks,
+      qualityScore: qualityScore ?? this.qualityScore,
+      lighting: lighting ?? this.lighting,
+      adaptive: adaptive ?? this.adaptive,
+      gridSize: gridSize ?? this.gridSize,
+      bitsPerChannel: bitsPerChannel ?? this.bitsPerChannel,
+      transportProfile: transportProfile ?? this.transportProfile,
+      historyRecordId: historyRecordId ?? this.historyRecordId,
     );
   }
 }

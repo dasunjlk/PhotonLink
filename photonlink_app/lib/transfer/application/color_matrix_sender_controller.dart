@@ -1,15 +1,21 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../history/application/history_controller.dart';
+import '../../history/domain/transfer_record.dart';
+import '../../protocols/interfaces/compression_type.dart';
 import '../../protocols/interfaces/encryption_mode.dart';
 import '../../protocols/interfaces/transfer_packet.dart';
-import '../../protocols/transport_registry.dart';
+import '../../protocols/transfer_method.dart';
 import '../../settings/application/settings_controller.dart';
+import '../adaptive/adaptive_engine_providers.dart';
 import '../color_matrix/color_frame_generator.dart';
 import '../color_matrix/color_matrix_frame.dart';
 import '../color_matrix/color_matrix_frame_codec.dart';
 import '../color_matrix/color_matrix_transfer_limits.dart';
+import '../color_matrix/color_matrix_transport.dart';
 import '../core/frame_stream_controller.dart';
 import '../core/platform_file_reader.dart';
 import '../core/integrity_verifier.dart';
@@ -27,9 +33,11 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
   FrameStreamController<ColorMatrixFrame>? _stream;
   SenderSessionBundle? _bundle;
   String? _keyExchangePayload;
+  ColorMatrixTransport? _sessionTransport;
   final _keyProvider = EncryptionKeyProvider();
   final _keyExchange = SessionKeyExchange();
   late FrameDiagnosticsCollector _diagnostics;
+  DateTime? _transferStartedAt;
 
   @override
   ColorMatrixSenderState build() {
@@ -53,8 +61,10 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
     _stream = null;
     _bundle = null;
     _keyExchangePayload = null;
+    _sessionTransport = null;
     _keyProvider.clear();
     _diagnostics.reset();
+    _transferStartedAt = null;
 
     state = state.copyWith(
       phase: TransferPhase.preparing,
@@ -77,6 +87,15 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
       TransferLimits.validateColorMatrixFileSize(bytes.length);
 
       final settings = ref.read(settingsProvider);
+      final adaptive = ref.read(colorMatrixSenderAdaptiveProvider);
+      await adaptive.initializeSession();
+      final mapped = adaptive.getSessionStartParams();
+
+      _sessionTransport = ColorMatrixTransport(
+        gridSize: mapped.gridSize,
+        bitsPerChannel: mapped.bitsPerChannel,
+      );
+
       final compression = settings.effectiveCompression;
       final encryption = settings.encryptionEnabled
           ? EncryptionMode.enabled
@@ -95,8 +114,7 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
         keyProvider: _keyProvider,
       );
 
-      final transport = ref.read(colorMatrixTransportProvider);
-      final codec = transport.encoder as ColorMatrixFrameCodec;
+      final codec = _sessionTransport!.encoder as ColorMatrixFrameCodec;
       final sessionId = _sessionFactory.generateSessionId();
       final chunkSize = ColorMatrixTransferLimits.resolveChunkSize(
         sessionId: sessionId,
@@ -136,10 +154,14 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
         session: _bundle!.session,
         totalFrames: _bundle!.dataPackets.length + 1,
         filePath: filePath,
-        framesPerSecond: settings.colorTransferFrameRate,
+        framesPerSecond: mapped.framesPerSecond,
         compression: compression,
         encryption: encryption,
         diagnostics: _diagnostics.current,
+        gridSize: mapped.gridSize,
+        bitsPerChannel: mapped.bitsPerChannel,
+        transportProfile: mapped.profile,
+        qualityScore: adaptive.state.qualityScore,
       );
     } on TransferLimitException catch (e) {
       _fail(e.message);
@@ -149,17 +171,17 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
   }
 
   Future<void> startTransmission() async {
-    if (_bundle == null) return;
+    if (_bundle == null || _sessionTransport == null) return;
 
-    final transport = ref.read(colorMatrixTransportProvider);
-    final codec = transport.encoder as ColorMatrixFrameCodec;
+    final codec = _sessionTransport!.encoder as ColorMatrixFrameCodec;
     codec.encoderKeyExchangePayload = _keyExchangePayload;
     final generator = ColorFrameGenerator(
       showDebugOverlay: ref.read(settingsProvider).debugOverlay,
     );
+    final adaptive = ref.read(colorMatrixSenderAdaptiveProvider);
 
     _stream = FrameStreamController<ColorMatrixFrame>(
-      encoder: transport.encoder,
+      encoder: _sessionTransport!.encoder,
     );
 
     final packets = <TransferPacket>[
@@ -167,22 +189,58 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
       ..._bundle!.dataPackets,
     ];
     _stream!.setPackets(packets);
+    _transferStartedAt = DateTime.now();
 
-    state = state.copyWith(phase: TransferPhase.transmitting);
+    final historyId =
+        '${_bundle!.session.id}-cm-send-${DateTime.now().millisecondsSinceEpoch}';
+    await ref.read(historyRepositoryProvider).addRecord(
+          TransferRecord(
+            id: historyId,
+            sessionId: _bundle!.session.id,
+            fileName: _bundle!.session.fileName,
+            method: TransferMethod.colorMatrix,
+            sizeBytes: _bundle!.session.fileSize,
+            status: TransferStatus.inProgress,
+            timestamp: DateTime.now(),
+            direction: TransferDirection.sent,
+            compressionUsed:
+                _bundle!.metadata.compression != CompressionType.none,
+            encryptionUsed:
+                _bundle!.metadata.encryption == EncryptionMode.enabled,
+            profileUsed: state.transportProfile.id,
+            protocolVersion: 4,
+          ),
+        );
+
+    state = state.copyWith(
+      phase: TransferPhase.transmitting,
+      historyRecordId: historyId,
+    );
+
+    void onFrame(ColorMatrixFrame frame, int index, int total) {
+      _diagnostics.recordFrameGenerated();
+      final raster = generator.generateRaster(frame);
+      final decision = adaptive.evaluateSenderFps(_diagnostics.current);
+      final fps = decision.applied
+          ? adaptive.state.mapped.framesPerSecond
+          : state.framesPerSecond;
+      if (decision.applied && _stream != null) {
+        _stream!.setFrameRate(fps);
+      }
+      state = state.copyWith(
+        currentFrameIndex: index,
+        totalFrames: total,
+        loopCount: _stream!.loopCount,
+        currentColorMatrixRaster: raster,
+        diagnostics: _diagnostics.current,
+        framesPerSecond: fps,
+        qualityScore: adaptive.state.qualityScore,
+      );
+    }
 
     _stream!.start(
       framesPerSecond: state.framesPerSecond,
-      onFrame: (frame, index, total) {
-        _diagnostics.recordFrameGenerated();
-        final raster = generator.generateRaster(frame);
-        state = state.copyWith(
-          currentFrameIndex: index,
-          totalFrames: total,
-          loopCount: _stream!.loopCount,
-          currentColorMatrixRaster: raster,
-          diagnostics: _diagnostics.current,
-        );
-      },
+      onFrame: onFrame,
     );
   }
 
@@ -191,8 +249,9 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
     state = state.copyWith(framesPerSecond: fps);
   }
 
-  void stopTransmission() {
+  Future<void> stopTransmission() async {
     _stream?.stop();
+    await _finalizeHistory(TransferStatus.cancelled);
     state = state.copyWith(phase: TransferPhase.cancelled);
   }
 
@@ -200,12 +259,47 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
     _stream?.dispose();
     _stream = null;
     _bundle = null;
+    _sessionTransport = null;
     _keyExchangePayload = null;
     _keyProvider.clear();
     _diagnostics.reset();
+    ref.read(colorMatrixSenderAdaptiveProvider).reset();
     state = ColorMatrixSenderState(
       framesPerSecond: ref.read(settingsProvider).colorTransferFrameRate,
     );
+  }
+
+  Future<void> _finalizeHistory(TransferStatus status) async {
+    final id = state.historyRecordId;
+    if (id == null) return;
+    final adaptive = ref.read(colorMatrixSenderAdaptiveProvider);
+    await adaptive.finalizeSession();
+    final elapsed = _transferStartedAt != null
+        ? DateTime.now().difference(_transferStartedAt!).inMilliseconds
+        : 0;
+    await ref.read(historyRepositoryProvider).replaceRecord(
+          TransferRecord(
+            id: id,
+            sessionId: state.session?.id,
+            fileName: state.session?.fileName ?? 'unknown',
+            method: TransferMethod.colorMatrix,
+            sizeBytes: state.session?.fileSize ?? 0,
+            status: status,
+            timestamp: DateTime.now(),
+            direction: TransferDirection.sent,
+            durationMs: elapsed,
+            compressionUsed: state.compression != CompressionType.none,
+            encryptionUsed: state.encryption == EncryptionMode.enabled,
+            transferSpeedBytesPerSec:
+                state.diagnostics.throughputBytesPerSecond,
+            avgQualityScore: adaptive.state.qualityScore.score,
+            avgThroughput: state.diagnostics.throughputBytesPerSecond,
+            profileUsed: state.transportProfile.id,
+            adaptiveEventCount: adaptive.diagnostics.appliedDecisionCount,
+            environmentSummary: adaptive.state.environment.summary,
+            protocolVersion: 4,
+          ),
+        );
   }
 
   void _fail(String message) {
@@ -213,5 +307,6 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
       phase: TransferPhase.failed,
       errorMessage: message,
     );
+    unawaited(_finalizeHistory(TransferStatus.failed));
   }
 }

@@ -4,12 +4,20 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../history/application/history_controller.dart';
+import '../../history/domain/transfer_record.dart';
+import '../../protocols/interfaces/compression_type.dart';
 import '../../protocols/interfaces/encryption_mode.dart';
 import '../../protocols/interfaces/transfer_packet.dart';
 import '../../protocols/interfaces/transfer_session.dart';
 import '../../protocols/transport_registry.dart';
+import '../../protocols/transfer_method.dart';
+import '../../settings/application/settings_controller.dart';
+import '../state/transfer_phase.dart';
+import '../adaptive/adaptive_engine_providers.dart';
 import '../color_matrix/color_matrix_frame.dart';
 import '../color_matrix/color_matrix_frame_codec.dart';
+import '../color_matrix/color_matrix_transport.dart';
 import '../core/integrity_verifier.dart';
 import '../core/payload_pipeline.dart';
 import '../core/reconstruction_engine.dart';
@@ -19,7 +27,6 @@ import '../security/encryption_key_provider.dart';
 import '../security/session_key_exchange.dart';
 import 'color_matrix_transfer_state.dart';
 import 'transfer_providers.dart';
-import 'transfer_state.dart';
 
 /// Color Matrix receiver: camera frames → decode → reconstruct → restore.
 class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
@@ -27,7 +34,10 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
   final _keyProvider = EncryptionKeyProvider();
   final _keyExchange = SessionKeyExchange();
   late FrameDiagnosticsCollector _diagnostics;
+  ColorMatrixTransport? _sessionTransport;
   bool _finalizing = false;
+  DateTime? _receiveStartedAt;
+  String? _historyId;
 
   @override
   ColorMatrixReceiverState build() {
@@ -38,30 +48,86 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
   PayloadPipeline get _pipeline => ref.read(payloadPipelineProvider);
   IntegrityVerifier get _verifier => ref.read(integrityVerifierProvider);
 
-  void startReceiving() {
+  Future<void> startReceiving({
+    int cameraWidth = 0,
+    int cameraHeight = 0,
+  }) async {
     _recon.reset();
     _keyProvider.clear();
     _diagnostics.reset();
     _finalizing = false;
-    state = const ColorMatrixReceiverState(
-      phase: TransferPhase.waitingForReceiver,
+    _receiveStartedAt = DateTime.now();
+    _historyId = null;
+
+    final adaptive = ref.read(colorMatrixReceiverAdaptiveProvider);
+    await adaptive.initializeSession(
+      cameraWidth: cameraWidth,
+      cameraHeight: cameraHeight,
+      isReceiver: true,
     );
+    final mapped = adaptive.getSessionStartParams();
+
+    final settings = ref.read(settingsProvider);
+    _sessionTransport = ColorMatrixTransport(
+      gridSize: mapped.gridSize,
+      bitsPerChannel: mapped.bitsPerChannel,
+    );
+
+    var mismatchWarning = adaptive.state.mismatchWarning;
+    if (settings.colorMatrixSize != mapped.gridSize ||
+        settings.colorBitsPerChannel != mapped.bitsPerChannel) {
+      mismatchWarning =
+          'Sender/receiver grid may differ — align settings or use matching profiles';
+    }
+
+    ref.read(adaptiveStateProvider.notifier).state = adaptive.state.copyWith(
+      mismatchWarning: mismatchWarning,
+    );
+
+    state = ColorMatrixReceiverState(
+      phase: TransferPhase.waitingForReceiver,
+      gridSize: mapped.gridSize,
+      bitsPerChannel: mapped.bitsPerChannel,
+      transportProfile: mapped.profile,
+      adaptive: adaptive.state.copyWith(mismatchWarning: mismatchWarning),
+      qualityScore: adaptive.state.qualityScore,
+      lighting: adaptive.state.lighting,
+    );
+  }
+
+  void recordBrightnessSample(double avg, {double variance = 0}) {
+    ref.read(colorMatrixReceiverAdaptiveProvider).recordBrightness(
+          avg,
+          variance: variance,
+        );
+    _syncAdaptiveState();
   }
 
   void onColorMatrixFrame(
     ColorMatrixFrame raw, {
     double detectionAccuracy = 0,
+    required bool detected,
   }) {
     if (_finalizing || state.phase.isTerminal) return;
     if (state.phase == TransferPhase.reconstructing) return;
 
+    final adaptive = ref.read(colorMatrixReceiverAdaptiveProvider);
+    adaptive.recordDetection(success: detected, accuracy: detectionAccuracy);
+
     _diagnostics.recordDetectionAccuracy(detectionAccuracy);
     final stopwatch = Stopwatch()..start();
 
-    final transport = ref.read(colorMatrixTransportProvider);
+    final transport = _sessionTransport ??
+        ref.read(colorMatrixTransportProvider);
     final packet = transport.decoder.decodeFrame(raw);
     stopwatch.stop();
     _diagnostics.recordDecodeTime(stopwatch.elapsed);
+
+    adaptive.recordDecode(
+      success: packet != null,
+      diag: _diagnostics.current,
+    );
+    _syncAdaptiveState();
 
     if (packet == null) {
       _diagnostics.recordFrameCorrupted();
@@ -92,7 +158,8 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
     MetadataPacket metadata, {
     required double detectionAccuracy,
   }) async {
-    final transport = ref.read(colorMatrixTransportProvider);
+    final transport = _sessionTransport ??
+        ref.read(colorMatrixTransportProvider);
     try {
       TransferLimits.validateMetadata(
         fileName: metadata.fileName,
@@ -126,6 +193,30 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
 
     _recon.ingest(metadata);
     _diagnostics.recordFrameReceived();
+
+    _historyId ??=
+        '${metadata.sessionId}-cm-recv-${DateTime.now().millisecondsSinceEpoch}';
+    if (_historyId != null) {
+      await ref.read(historyRepositoryProvider).addRecord(
+            TransferRecord(
+              id: _historyId!,
+              sessionId: metadata.sessionId,
+              fileName: metadata.fileName,
+              method: TransferMethod.colorMatrix,
+              sizeBytes: metadata.originalSize ?? metadata.fileSize,
+              status: TransferStatus.inProgress,
+              timestamp: DateTime.now(),
+              direction: TransferDirection.received,
+              compressionUsed:
+                  metadata.compression != CompressionType.none,
+              encryptionUsed:
+                  metadata.encryption == EncryptionMode.enabled,
+              profileUsed: state.transportProfile.id,
+              protocolVersion: 4,
+            ),
+          );
+    }
+
     state = state.copyWith(
       phase: TransferPhase.receiving,
       session: TransferSession(
@@ -139,6 +230,7 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
         startedAt: DateTime.now(),
       ),
       totalChunks: metadata.totalChunks,
+      historyRecordId: _historyId,
     );
     _syncDiagnostics(detectionAccuracy: detectionAccuracy);
   }
@@ -223,6 +315,40 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
 
       _keyProvider.clear();
 
+      final adaptive = ref.read(colorMatrixReceiverAdaptiveProvider);
+      await adaptive.finalizeSession();
+
+      final elapsed = _receiveStartedAt != null
+          ? DateTime.now().difference(_receiveStartedAt!).inMilliseconds
+          : 0;
+
+      if (_historyId != null) {
+        await ref.read(historyRepositoryProvider).replaceRecord(
+              TransferRecord(
+                id: _historyId!,
+                sessionId: meta.sessionId,
+                fileName: meta.fileName,
+                method: TransferMethod.colorMatrix,
+                sizeBytes: expectedSize,
+                status: TransferStatus.success,
+                timestamp: DateTime.now(),
+                direction: TransferDirection.received,
+                durationMs: elapsed,
+                compressionUsed: meta.compression != CompressionType.none,
+                encryptionUsed: meta.encryption == EncryptionMode.enabled,
+                transferSpeedBytesPerSec:
+                    _diagnostics.current.throughputBytesPerSecond,
+                avgQualityScore: adaptive.state.qualityScore.score,
+                avgThroughput: _diagnostics.current.throughputBytesPerSecond,
+                profileUsed: state.transportProfile.id,
+                adaptiveEventCount:
+                    adaptive.diagnostics.appliedDecisionCount,
+                environmentSummary: adaptive.state.environment.summary,
+                protocolVersion: 4,
+              ),
+            );
+      }
+
       state = state.copyWith(
         phase: TransferPhase.completed,
         outputPath: outputPath,
@@ -230,15 +356,55 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
         progress: 1.0,
         receivedChunks: meta.totalChunks,
         missingChunks: 0,
+        qualityScore: adaptive.state.qualityScore,
       );
     } catch (e) {
       _keyProvider.clear();
+      await _finalizeHistoryFailed(e.toString());
       state = state.copyWith(
         phase: TransferPhase.failed,
         errorMessage: e.toString(),
         integrityValid: false,
       );
     }
+  }
+
+  Future<void> _finalizeHistoryFailed(String reason) async {
+    if (_historyId == null) return;
+    final adaptive = ref.read(colorMatrixReceiverAdaptiveProvider);
+    await adaptive.finalizeSession();
+    final elapsed = _receiveStartedAt != null
+        ? DateTime.now().difference(_receiveStartedAt!).inMilliseconds
+        : 0;
+    await ref.read(historyRepositoryProvider).replaceRecord(
+          TransferRecord(
+            id: _historyId!,
+            sessionId: state.session?.id,
+            fileName: state.session?.fileName ?? 'unknown',
+            method: TransferMethod.colorMatrix,
+            sizeBytes: state.session?.fileSize ?? 0,
+            status: TransferStatus.failed,
+            timestamp: DateTime.now(),
+            direction: TransferDirection.received,
+            durationMs: elapsed,
+            failureReason: reason,
+            avgQualityScore: adaptive.state.qualityScore.score,
+            profileUsed: state.transportProfile.id,
+            adaptiveEventCount: adaptive.diagnostics.appliedDecisionCount,
+            environmentSummary: adaptive.state.environment.summary,
+            protocolVersion: 4,
+          ),
+        );
+  }
+
+  void _syncAdaptiveState() {
+    final adaptive = ref.read(colorMatrixReceiverAdaptiveProvider);
+    ref.read(adaptiveStateProvider.notifier).state = adaptive.state;
+    state = state.copyWith(
+      adaptive: adaptive.state,
+      qualityScore: adaptive.state.qualityScore,
+      lighting: adaptive.state.lighting,
+    );
   }
 
   void _syncDiagnostics({required double detectionAccuracy}) {
@@ -251,11 +417,16 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
     );
   }
 
+  int get processingThrottleMs =>
+      state.adaptive.processingThrottleMs;
+
   void reset() {
     _recon.reset();
     _keyProvider.clear();
     _diagnostics.reset();
     _finalizing = false;
+    _sessionTransport = null;
+    ref.read(colorMatrixReceiverAdaptiveProvider).reset();
     state = const ColorMatrixReceiverState();
   }
 }

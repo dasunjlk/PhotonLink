@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../protocols/transfer_method.dart';
+import '../../transfer/adaptive/models/transport_profile.dart';
 import '../../transfer/scheduler/transfer_mode.dart';
 import '../../protocols/interfaces/compression_type.dart';
 
@@ -19,6 +20,11 @@ class AppSettings {
     this.colorMatrixSize = 24,
     this.colorTransferFrameRate = 4.0,
     this.colorTransportQuality = 'balanced',
+    this.colorBitsPerChannel = 2,
+    this.adaptiveModeEnabled = true,
+    this.adaptiveAggressiveness = AdaptiveAggressiveness.normal,
+    this.profileOverride = ProfileOverride.auto,
+    this.qualityMonitoringEnabled = true,
     this.debugOverlay = false,
     this.experimentalFeatures = false,
   });
@@ -35,6 +41,11 @@ class AppSettings {
   final int colorMatrixSize;
   final double colorTransferFrameRate;
   final String colorTransportQuality;
+  final int colorBitsPerChannel;
+  final bool adaptiveModeEnabled;
+  final AdaptiveAggressiveness adaptiveAggressiveness;
+  final ProfileOverride profileOverride;
+  final bool qualityMonitoringEnabled;
   final bool debugOverlay;
   final bool experimentalFeatures;
 
@@ -54,6 +65,11 @@ class AppSettings {
     int? colorMatrixSize,
     double? colorTransferFrameRate,
     String? colorTransportQuality,
+    int? colorBitsPerChannel,
+    bool? adaptiveModeEnabled,
+    AdaptiveAggressiveness? adaptiveAggressiveness,
+    ProfileOverride? profileOverride,
+    bool? qualityMonitoringEnabled,
     bool? debugOverlay,
     bool? experimentalFeatures,
   }) {
@@ -72,6 +88,13 @@ class AppSettings {
           colorTransferFrameRate ?? this.colorTransferFrameRate,
       colorTransportQuality:
           colorTransportQuality ?? this.colorTransportQuality,
+      colorBitsPerChannel: colorBitsPerChannel ?? this.colorBitsPerChannel,
+      adaptiveModeEnabled: adaptiveModeEnabled ?? this.adaptiveModeEnabled,
+      adaptiveAggressiveness:
+          adaptiveAggressiveness ?? this.adaptiveAggressiveness,
+      profileOverride: profileOverride ?? this.profileOverride,
+      qualityMonitoringEnabled:
+          qualityMonitoringEnabled ?? this.qualityMonitoringEnabled,
       debugOverlay: debugOverlay ?? this.debugOverlay,
       experimentalFeatures: experimentalFeatures ?? this.experimentalFeatures,
     );
