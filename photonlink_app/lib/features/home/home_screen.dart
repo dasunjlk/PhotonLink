@@ -38,6 +38,11 @@ class HomeScreen extends StatelessWidget {
                     tooltip: 'History',
                   ),
                   IconButton.filledTonal(
+                    onPressed: () => context.push(AppRoutes.analytics),
+                    icon: const Icon(Icons.analytics_outlined),
+                    tooltip: 'Analytics',
+                  ),
+                  IconButton.filledTonal(
                     onPressed: () => context.push(AppRoutes.settings),
                     icon: const Icon(Icons.settings_rounded),
                     tooltip: 'Settings',

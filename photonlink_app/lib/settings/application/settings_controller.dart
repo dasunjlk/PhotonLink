@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../protocols/interfaces/compression_type.dart';
 import '../../services/storage/preferences_service.dart';
+import '../../transfer/adaptive/models/transport_profile.dart';
 import '../../transfer/scheduler/transfer_mode.dart';
 import '../data/settings_repository.dart';
 import '../domain/app_settings.dart';
@@ -72,6 +73,33 @@ class SettingsController extends StateNotifier<AppSettings> {
 
   Future<void> updateColorTransportQuality(String quality) async {
     state = state.copyWith(colorTransportQuality: quality);
+    await _repository.save(state);
+  }
+
+  Future<void> updateColorBitsPerChannel(int bpc) async {
+    state = state.copyWith(colorBitsPerChannel: bpc);
+    await _repository.save(state);
+  }
+
+  Future<void> toggleAdaptiveMode(bool enabled) async {
+    state = state.copyWith(adaptiveModeEnabled: enabled);
+    await _repository.save(state);
+  }
+
+  Future<void> updateAdaptiveAggressiveness(
+    AdaptiveAggressiveness aggressiveness,
+  ) async {
+    state = state.copyWith(adaptiveAggressiveness: aggressiveness);
+    await _repository.save(state);
+  }
+
+  Future<void> updateProfileOverride(ProfileOverride override) async {
+    state = state.copyWith(profileOverride: override);
+    await _repository.save(state);
+  }
+
+  Future<void> toggleQualityMonitoring(bool enabled) async {
+    state = state.copyWith(qualityMonitoringEnabled: enabled);
     await _repository.save(state);
   }
 

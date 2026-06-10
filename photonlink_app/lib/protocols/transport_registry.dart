@@ -51,6 +51,7 @@ final transportRegistryProvider = Provider<TransportRegistry>((ref) {
       method: TransferMethod.colorMatrix,
       transport: ColorMatrixTransport(
         gridSize: settings.colorMatrixSize,
+        bitsPerChannel: settings.colorBitsPerChannel,
       ),
     ),
   });

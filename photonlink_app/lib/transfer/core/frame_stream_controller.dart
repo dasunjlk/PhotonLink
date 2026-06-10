@@ -16,6 +16,7 @@ class FrameStreamController<TFrame> {
   int _loopCount = 0;
   double _framesPerSecond = 2.0;
   int _framesGenerated = 0;
+  void Function(TFrame frameData, int index, int total)? _onFrame;
 
   TFrame? get currentFrame {
     if (_packets.isEmpty) return null;
@@ -50,28 +51,41 @@ class FrameStreamController<TFrame> {
     if (_packets.isEmpty) return;
 
     _framesPerSecond = framesPerSecond;
+    _onFrame = onFrame;
+    _emitCurrentFrame();
+    _scheduleTimer();
+  }
+
+  void setFrameRate(double framesPerSecond) {
+    if (framesPerSecond == _framesPerSecond) return;
+    _framesPerSecond = framesPerSecond;
+    if (_timer?.isActive ?? false) {
+      _timer?.cancel();
+      _scheduleTimer();
+    }
+  }
+
+  void _scheduleTimer() {
+    if (_packets.isEmpty || _onFrame == null) return;
     final interval = Duration(
-      milliseconds: (1000 / framesPerSecond).round().clamp(50, 10000),
+      milliseconds: (1000 / _framesPerSecond).round().clamp(50, 10000),
     );
-
-    final frame = _encoder.encodeFrame(_packets[_frameIndex]);
-    _framesGenerated++;
-    onFrame(frame, _frameIndex, _packets.length);
-
     _timer = Timer.periodic(interval, (_) {
       _frameIndex++;
       if (_frameIndex >= _packets.length) {
         _frameIndex = 0;
         _loopCount++;
       }
-      final next = _encoder.encodeFrame(_packets[_frameIndex]);
-      _framesGenerated++;
-      onFrame(next, _frameIndex, _packets.length);
+      _emitCurrentFrame();
     });
   }
 
-  void setFrameRate(double framesPerSecond) {
-    _framesPerSecond = framesPerSecond;
+  void _emitCurrentFrame() {
+    final callback = _onFrame;
+    if (callback == null || _packets.isEmpty) return;
+    final frame = _encoder.encodeFrame(_packets[_frameIndex]);
+    _framesGenerated++;
+    callback(frame, _frameIndex, _packets.length);
   }
 
   void stop() {

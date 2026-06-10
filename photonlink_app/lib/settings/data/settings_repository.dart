@@ -4,6 +4,7 @@ import '../../core/constants.dart';
 import '../../protocols/interfaces/compression_type.dart';
 import '../../protocols/transfer_method.dart';
 import '../../services/storage/preferences_service.dart';
+import '../../transfer/adaptive/models/transport_profile.dart';
 import '../../transfer/scheduler/transfer_mode.dart';
 import '../domain/app_settings.dart';
 
@@ -30,6 +31,13 @@ class SettingsRepository {
         _prefs.getDouble(AppConstants.prefColorTransferFrameRate);
     final colorQuality =
         _prefs.getString(AppConstants.prefColorTransportQuality);
+    final colorBpc = _prefs.getInt(AppConstants.prefColorBitsPerChannel);
+    final adaptiveMode = _prefs.getBool(AppConstants.prefAdaptiveMode);
+    final aggressivenessId =
+        _prefs.getString(AppConstants.prefAdaptiveAggressiveness);
+    final profileOverrideId = _prefs.getString(AppConstants.prefProfileOverride);
+    final qualityMonitoring =
+        _prefs.getBool(AppConstants.prefQualityMonitoring);
     final debugOverlay = _prefs.getBool(AppConstants.prefDebugOverlay);
     final experimental =
         _prefs.getBool(AppConstants.prefExperimentalFeatures);
@@ -49,6 +57,12 @@ class SettingsRepository {
       colorMatrixSize: _validGridSize(colorMatrixSize),
       colorTransferFrameRate: colorFrameRate ?? 4.0,
       colorTransportQuality: colorQuality ?? 'balanced',
+      colorBitsPerChannel: _validBitsPerChannel(colorBpc),
+      adaptiveModeEnabled: adaptiveMode ?? true,
+      adaptiveAggressiveness:
+          AdaptiveAggressiveness.fromId(aggressivenessId),
+      profileOverride: ProfileOverride.fromId(profileOverrideId),
+      qualityMonitoringEnabled: qualityMonitoring ?? true,
       debugOverlay: debugOverlay ?? false,
       experimentalFeatures: experimental ?? false,
     );
@@ -100,6 +114,26 @@ class SettingsRepository {
       AppConstants.prefColorTransportQuality,
       settings.colorTransportQuality,
     );
+    await _prefs.setInt(
+      AppConstants.prefColorBitsPerChannel,
+      settings.colorBitsPerChannel,
+    );
+    await _prefs.setBool(
+      AppConstants.prefAdaptiveMode,
+      settings.adaptiveModeEnabled,
+    );
+    await _prefs.setString(
+      AppConstants.prefAdaptiveAggressiveness,
+      settings.adaptiveAggressiveness.id,
+    );
+    await _prefs.setString(
+      AppConstants.prefProfileOverride,
+      settings.profileOverride.id,
+    );
+    await _prefs.setBool(
+      AppConstants.prefQualityMonitoring,
+      settings.qualityMonitoringEnabled,
+    );
     await _prefs.setBool(
       AppConstants.prefDebugOverlay,
       settings.debugOverlay,
@@ -108,6 +142,14 @@ class SettingsRepository {
       AppConstants.prefExperimentalFeatures,
       settings.experimentalFeatures,
     );
+  }
+
+  double? loadLastQualityScore() {
+    return _prefs.getDouble(AppConstants.prefLastQualityScore);
+  }
+
+  Future<void> saveLastQualityScore(double score) async {
+    await _prefs.setDouble(AppConstants.prefLastQualityScore, score);
   }
 
   TransferMethod _methodFromId(String? id) {
@@ -119,8 +161,15 @@ class SettingsRepository {
   }
 
   int _validGridSize(int? size) {
-    if (size == 24) return 24;
+    if (size == 48) return 48;
     if (size == 32) return 32;
+    if (size == 24) return 24;
     return 16;
+  }
+
+  int _validBitsPerChannel(int? bpc) {
+    if (bpc == 1) return 1;
+    if (bpc == 3) return 3;
+    return 2;
   }
 }

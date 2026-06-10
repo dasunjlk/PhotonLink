@@ -2,7 +2,7 @@
 
 ## Overview
 
-PhotonLink is an offline peer-to-peer file transfer platform using optical communication (QR codes, color matrices). **Phase 4** adds compression, encryption, scheduling, and throughput monitoring on the reliable bidirectional QR transport. **Phase 5** adds **Color Matrix** as a second registered transport via a transport-agnostic protocol stack.
+PhotonLink is an offline peer-to-peer file transfer platform using optical communication (QR codes, color matrices). **Phase 4** adds compression, encryption, scheduling, and throughput monitoring on the reliable bidirectional QR transport. **Phase 5** adds **Color Matrix** as a second registered transport via a transport-agnostic protocol stack. **Phase 6** adds the **Adaptive Optical Engine** for capability/environment-aware parameter tuning.
 
 ## Layer Diagram
 
@@ -14,7 +14,7 @@ PhotonLink is an offline peer-to-peer file transfer platform using optical commu
 │  transfer/  core (chunking, payload pipeline, integrity) │
 │             compression · encryption · security          │
 │             scheduler · metrics · reliability          │
-│             qr/ · color_matrix/ · diagnostics/         │
+│             qr/ · color_matrix/ · adaptive/ · diagnostics/ │
 │             application (Riverpod controllers)         │
 ├──────────────────────────────────────────────────────────┤
 │  protocols/ interfaces + transport_registry + impl       │
@@ -90,6 +90,20 @@ Controllers: `colorMatrixSenderControllerProvider`, `colorMatrixReceiverControll
 
 See [COLOR_MATRIX_FORMAT.md](COLOR_MATRIX_FORMAT.md).
 
+## Adaptive Optical Engine (Phase 6)
+
+Transport-agnostic adaptation layer in `transfer/adaptive/`:
+
+- `DeviceCapabilityDetector` — device/display/camera capability profile
+- `EnvironmentAnalyzer` — brightness, detection, decode, loss rates
+- `QualityScoreCalculator` — 0–100 quality score
+- `AdaptationEngine` — cooldown + hysteresis tier adjustments
+- `ColorMatrixParameterMapper` — tiers → grid size / fps / density
+
+Integrated into Color Matrix sender (session params + live FPS) and receiver (cadence, lighting hints, analytics). Settings: adaptive mode, aggressiveness, profile override, quality monitoring.
+
+See [ADAPTIVE_ENGINE.md](ADAPTIVE_ENGINE.md) and [PHASE6_PERFORMANCE.md](PHASE6_PERFORMANCE.md).
+
 ## Controllers
 
 | Provider | Transport | Flow |
@@ -109,7 +123,7 @@ See [COLOR_MATRIX_FORMAT.md](COLOR_MATRIX_FORMAT.md).
 |-------|--------|
 | `/qr/send`, `/qr/receive`, `/qr/complete` | QR transfer |
 | `/color-matrix/send`, `/color-matrix/receive`, `/color-matrix/complete` | Color Matrix |
-| `/settings`, `/history` | Settings, History |
+| `/settings`, `/history`, `/analytics` | Settings, History, Live analytics |
 
 ## Test Coverage
 
@@ -119,4 +133,4 @@ Includes Phase 3–4 QR reliability, compression, encryption, pipeline, schedule
 
 ## Future Transports
 
-`Transport<T>` abstraction supports `opticalStream`, `audio`, `flash` without changing the core pipeline. See [PHASE6_READINESS.md](PHASE6_READINESS.md).
+`Transport<T>` abstraction supports `opticalStream`, `audio`, `flash` without changing the core pipeline. Adaptive engine tiers are reusable by future transports. See [PHASE7_READINESS.md](PHASE7_READINESS.md).

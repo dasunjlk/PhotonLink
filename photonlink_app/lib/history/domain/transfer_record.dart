@@ -38,7 +38,12 @@ class TransferRecord {
     this.encryptionUsed = false,
     this.compressionRatio,
     this.transferSpeedBytesPerSec,
-    this.protocolVersion = 1,
+    this.avgQualityScore,
+    this.avgThroughput,
+    this.profileUsed,
+    this.adaptiveEventCount = 0,
+    this.environmentSummary,
+    this.protocolVersion = 4,
   });
 
   final String id;
@@ -56,5 +61,10 @@ class TransferRecord {
   final bool encryptionUsed;
   final double? compressionRatio;
   final double? transferSpeedBytesPerSec;
+  final double? avgQualityScore;
+  final double? avgThroughput;
+  final String? profileUsed;
+  final int adaptiveEventCount;
+  final String? environmentSummary;
   final int protocolVersion;
 }

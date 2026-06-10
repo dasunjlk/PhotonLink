@@ -11,6 +11,7 @@ import '../../services/permissions/permission_service.dart';
 import '../../settings/application/settings_controller.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
 import '../../shared/widgets/scan_frame_overlay.dart';
+import '../../transfer/adaptive/brightness_sampler.dart';
 import '../../transfer/application/color_matrix_transfer_state.dart';
 import '../../transfer/application/transfer_providers.dart';
 import '../../transfer/color_matrix/color_frame_detector.dart';
@@ -33,20 +34,18 @@ class _ColorMatrixReceiverScreenState
 
   CameraController? _cameraController;
   final _permissionService = PermissionService();
+  final _brightnessSampler = const BrightnessSampler();
   bool _permissionGranted = false;
   bool _checkingPermission = true;
   bool _isProcessing = false;
   DateTime _lastProcess = DateTime.fromMillisecondsSinceEpoch(0);
-  static const _throttleMs = 200;
 
   final _detector = const ColorFrameDetector();
+
   @override
   void initState() {
     super.initState();
     _initPermission();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(colorMatrixReceiverControllerProvider.notifier).startReceiving();
-    });
   }
 
   Future<void> _initPermission() async {
@@ -97,11 +96,17 @@ class _ColorMatrixReceiverScreenState
 
     setState(() => _cameraController = controller);
 
+    await ref.read(colorMatrixReceiverControllerProvider.notifier).startReceiving(
+          cameraWidth: controller.value.previewSize?.height.toInt() ?? 0,
+          cameraHeight: controller.value.previewSize?.width.toInt() ?? 0,
+        );
+
     await controller.startImageStream(_onImageStream);
   }
 
   Future<void> _onImageStream(CameraImage image) async {
     if (_isProcessing) return;
+    final notifier = ref.read(colorMatrixReceiverControllerProvider.notifier);
     final receiverState = ref.read(colorMatrixReceiverControllerProvider);
     if (receiverState.phase == TransferPhase.completed ||
         receiverState.phase == TransferPhase.failed ||
@@ -109,22 +114,47 @@ class _ColorMatrixReceiverScreenState
       return;
     }
 
+    final throttleMs = notifier.processingThrottleMs;
     final now = DateTime.now();
-    if (now.difference(_lastProcess).inMilliseconds < _throttleMs) return;
+    if (now.difference(_lastProcess).inMilliseconds < throttleMs) return;
     _lastProcess = now;
     _isProcessing = true;
 
     try {
+      final brightness = _brightnessSampler.sampleFromYuv(image);
+      notifier.recordBrightnessSample(
+        brightness.avg,
+        variance: brightness.variance,
+      );
+
       final rgb = _yuvToRgb(image);
-      final settings = ref.read(settingsProvider);
+      final gridSize = receiverState.gridSize;
       final detection = _detector.detectFromRgb(
         rgbBytes: rgb.bytes,
         width: rgb.width,
         height: rgb.height,
-        gridSize: settings.colorMatrixSize,
+        gridSize: gridSize,
       );
 
-      if (!detection.detected || detection.cells.isEmpty) return;
+      if (!detection.detected || detection.cells.isEmpty) {
+        notifier.onColorMatrixFrame(
+          ColorMatrixFrame(
+            protocolVersion: ColorMatrixFrame.currentProtocolVersion,
+            sessionId: '',
+            frameId: 0,
+            packetId: 0,
+            isMetadata: false,
+            totalPackets: 0,
+            payload: Uint8List(0),
+            checksum: 0,
+            gridSize: gridSize,
+            cells: const [],
+          ),
+          detectionAccuracy: 0,
+          detected: false,
+        );
+        return;
+      }
 
       final frame = ColorMatrixFrame(
         protocolVersion: ColorMatrixFrame.currentProtocolVersion,
@@ -139,10 +169,11 @@ class _ColorMatrixReceiverScreenState
         cells: detection.cells,
       );
 
-      ref.read(colorMatrixReceiverControllerProvider.notifier).onColorMatrixFrame(
-            frame,
-            detectionAccuracy: detection.accuracy,
-          );
+      notifier.onColorMatrixFrame(
+        frame,
+        detectionAccuracy: detection.accuracy,
+        detected: true,
+      );
     } catch (_) {
       // Skip bad frames
     } finally {
@@ -195,6 +226,8 @@ class _ColorMatrixReceiverScreenState
     final theme = Theme.of(context);
     final accent = _method.accentColor;
     final receiverState = ref.watch(colorMatrixReceiverControllerProvider);
+    final settings = ref.watch(settingsProvider);
+    final showQuality = settings.qualityMonitoringEnabled;
 
     ref.listen<ColorMatrixReceiverState>(
       colorMatrixReceiverControllerProvider,
@@ -228,7 +261,36 @@ class _ColorMatrixReceiverScreenState
                     ScanFrameOverlay(
                       label: 'Align color matrix within frame',
                     ),
-                    if (ref.watch(settingsProvider).debugOverlay)
+                    if (receiverState.lighting.showOverlay)
+                      Positioned(
+                        top: 72,
+                        left: 16,
+                        right: 16,
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.wb_sunny_outlined,
+                                  color: Colors.amber, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  receiverState.lighting.hint,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    if (settings.debugOverlay)
                       Positioned(
                         top: 80,
                         left: 16,
@@ -241,6 +303,15 @@ class _ColorMatrixReceiverScreenState
                           ),
                         ),
                       ),
+                    if (showQuality)
+                      Positioned(
+                        top: 120,
+                        right: 16,
+                        child: _QualityBadge(
+                          score: receiverState.qualityScore.score,
+                          profile: receiverState.transportProfile.id,
+                        ),
+                      ),
                     Positioned(
                       left: AppSpacing.screenPadding,
                       right: AppSpacing.screenPadding,
@@ -249,10 +320,39 @@ class _ColorMatrixReceiverScreenState
                         receiverState: receiverState,
                         accent: accent,
                         theme: theme,
+                        showQuality: showQuality,
                       ),
                     ),
                   ],
                 ),
+    );
+  }
+}
+
+class _QualityBadge extends StatelessWidget {
+  const _QualityBadge({required this.score, required this.profile});
+
+  final double score;
+  final String profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = score >= 75
+        ? Colors.green
+        : score >= 50
+            ? Colors.orange
+            : Colors.red;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black54,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color),
+      ),
+      child: Text(
+        'Q ${score.toStringAsFixed(0)} · $profile',
+        style: TextStyle(color: color, fontWeight: FontWeight.w600),
+      ),
     );
   }
 }
@@ -262,11 +362,13 @@ class _ProgressPanel extends StatelessWidget {
     required this.receiverState,
     required this.accent,
     required this.theme,
+    required this.showQuality,
   });
 
   final ColorMatrixReceiverState receiverState;
   final Color accent;
   final ThemeData theme;
+  final bool showQuality;
 
   @override
   Widget build(BuildContext context) {
@@ -306,6 +408,13 @@ class _ProgressPanel extends StatelessWidget {
             'Frames: ${diag.framesReceived} · Corrupted: ${diag.framesCorrupted} · Missing: ${receiverState.missingChunks}',
             style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
           ),
+          if (showQuality)
+            Text(
+              'Quality: ${receiverState.qualityScore.score.toStringAsFixed(0)} · '
+              '${receiverState.mappedGridLabel} · '
+              '${diag.throughputBytesPerSecond.toStringAsFixed(0)} B/s',
+              style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
+            ),
           if (receiverState.duplicatesIgnored > 0)
             Text(
               'Duplicates: ${receiverState.duplicatesIgnored}',
@@ -315,6 +424,10 @@ class _ProgressPanel extends StatelessWidget {
       ),
     );
   }
+}
+
+extension on ColorMatrixReceiverState {
+  String get mappedGridLabel => '$gridSize×$gridSize · $bitsPerChannel bpc';
 }
 
 class _PermissionDenied extends StatelessWidget {
