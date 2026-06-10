@@ -22,6 +22,8 @@ import '../core/integrity_verifier.dart';
 import '../core/payload_pipeline.dart';
 import '../core/session_factory.dart';
 import '../core/transfer_limits.dart';
+import '../fec/fec_configuration_factory.dart';
+import '../fec/recovery_engine.dart';
 import '../diagnostics/diagnostics_collector.dart';
 import '../security/encryption_key_provider.dart';
 import '../security/session_key_exchange.dart';
@@ -37,6 +39,8 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
   final _keyProvider = EncryptionKeyProvider();
   final _keyExchange = SessionKeyExchange();
   late FrameDiagnosticsCollector _diagnostics;
+  final _fecRecovery = RecoveryEngine();
+  final _fecFactory = const FecConfigurationFactory();
   DateTime? _transferStartedAt;
 
   @override
@@ -64,6 +68,7 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
     _sessionTransport = null;
     _keyProvider.clear();
     _diagnostics.reset();
+    _fecRecovery.reset();
     _transferStartedAt = null;
 
     state = state.copyWith(
@@ -87,6 +92,8 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
       TransferLimits.validateColorMatrixFileSize(bytes.length);
 
       final settings = ref.read(settingsProvider);
+      final fecConfig = _fecFactory.fromSettings(settings);
+      _fecRecovery.configure(fecConfig);
       final adaptive = ref.read(colorMatrixSenderAdaptiveProvider);
       await adaptive.initializeSession();
       final mapped = adaptive.getSessionStartParams();
@@ -188,6 +195,15 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
       _bundle!.metadata,
       ..._bundle!.dataPackets,
     ];
+    if (_fecRecovery.config.enabled) {
+      packets.addAll(
+        _fecRecovery.generateParity(
+          dataPackets: _bundle!.dataPackets,
+          sessionId: _bundle!.session.id,
+          totalChunks: _bundle!.metadata.totalChunks,
+        ),
+      );
+    }
     _stream!.setPackets(packets);
     _transferStartedAt = DateTime.now();
 
@@ -208,13 +224,16 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
             encryptionUsed:
                 _bundle!.metadata.encryption == EncryptionMode.enabled,
             profileUsed: state.transportProfile.id,
-            protocolVersion: 4,
+            protocolVersion: 5,
+            fecProfile: _fecRecovery.config.profile.id,
+            parityOverhead: _fecRecovery.statistics.fecOverhead,
           ),
         );
 
     state = state.copyWith(
       phase: TransferPhase.transmitting,
       historyRecordId: historyId,
+      totalFrames: packets.length + 1,
     );
 
     void onFrame(ColorMatrixFrame frame, int index, int total) {
@@ -297,7 +316,11 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
             profileUsed: state.transportProfile.id,
             adaptiveEventCount: adaptive.diagnostics.appliedDecisionCount,
             environmentSummary: adaptive.state.environment.summary,
-            protocolVersion: 4,
+            protocolVersion: 5,
+            fecProfile: _fecRecovery.config.profile.id,
+            packetsRecovered: _fecRecovery.statistics.packetsRecovered,
+            recoveryRate: _fecRecovery.statistics.recoverySuccessRate,
+            parityOverhead: _fecRecovery.statistics.fecOverhead,
           ),
         );
   }

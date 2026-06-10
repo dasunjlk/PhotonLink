@@ -1,4 +1,5 @@
 import '../../protocols/interfaces/reliability/transfer_diagnostics.dart';
+import '../fec/models/fec_statistics.dart';
 import 'models/environment_profile.dart';
 import 'models/quality_score.dart';
 
@@ -9,6 +10,7 @@ class QualityScoreCalculator {
   QualityScore calculate({
     required FrameDiagnostics diagnostics,
     required EnvironmentProfile environment,
+    FecStatistics? fecStats,
   }) {
     final totalFrames = diagnostics.framesReceived +
         diagnostics.framesCorrupted +
@@ -42,12 +44,23 @@ class QualityScoreCalculator {
             ? 70.0
             : 100.0;
 
-    final score = (frameLossFactor * 0.25 +
-            decodeErrorFactor * 0.30 +
-            retryFactor * 0.10 +
-            detectionStabilityFactor * 0.25 +
-            brightnessFactor * 0.10)
-        .clamp(0.0, 100.0);
+    final recoveryFactor = _recoveryFactor(fecStats);
+
+    final hasFec = fecStats != null && fecStats.parityGenerated > 0;
+    final score = hasFec
+        ? (frameLossFactor * 0.20 +
+                decodeErrorFactor * 0.25 +
+                retryFactor * 0.08 +
+                detectionStabilityFactor * 0.22 +
+                brightnessFactor * 0.10 +
+                recoveryFactor * 0.15)
+            .clamp(0.0, 100.0)
+        : (frameLossFactor * 0.25 +
+                decodeErrorFactor * 0.30 +
+                retryFactor * 0.10 +
+                detectionStabilityFactor * 0.25 +
+                brightnessFactor * 0.10)
+            .clamp(0.0, 100.0);
 
     return QualityScore(
       score: score,
@@ -57,6 +70,16 @@ class QualityScoreCalculator {
       detectionStabilityFactor:
           detectionStabilityFactor.clamp(0, 100).toDouble(),
       brightnessFactor: brightnessFactor.clamp(0, 100).toDouble(),
+      recoveryFactor: recoveryFactor.clamp(0, 100).toDouble(),
     );
+  }
+
+  double _recoveryFactor(FecStatistics? fecStats) {
+    if (fecStats == null || fecStats.parityGenerated == 0) return 100.0;
+    final successRate = fecStats.recoverySuccessRate * 100;
+    final efficiency = (fecStats.parityEfficiency * 50).clamp(0, 50);
+    final overheadPenalty =
+        (fecStats.fecOverhead * 10).clamp(0, 30).toDouble();
+    return (successRate * 0.6 + efficiency - overheadPenalty).clamp(0, 100);
   }
 }

@@ -22,6 +22,26 @@ class ColorCell {
   int get hashCode => Object.hash(r, g, b);
 }
 
+/// Packet type for Color Matrix frames (PLCM v1).
+enum ColorMatrixPacketType {
+  metadata(0),
+  data(1),
+  parity(2);
+
+  const ColorMatrixPacketType(this.value);
+
+  final int value;
+
+  static ColorMatrixPacketType fromValue(int value) {
+    return ColorMatrixPacketType.values.firstWhere(
+      (t) => t.value == value,
+      orElse: () => ColorMatrixPacketType.data,
+    );
+  }
+
+  bool get isMetadata => this == ColorMatrixPacketType.metadata;
+}
+
 /// Transport frame for Color Matrix optical encoding (PLCM v1).
 ///
 /// See docs/COLOR_MATRIX_FORMAT.md for wire format details.
@@ -31,7 +51,7 @@ class ColorMatrixFrame {
     required this.sessionId,
     required this.frameId,
     required this.packetId,
-    required this.isMetadata,
+    required this.packetType,
     required this.totalPackets,
     required this.payload,
     required this.checksum,
@@ -41,6 +61,24 @@ class ColorMatrixFrame {
     this.rasterBytes,
   });
 
+  /// Backward-compatible constructor using [isMetadata] bool.
+  ColorMatrixFrame.legacy({
+    required this.protocolVersion,
+    required this.sessionId,
+    required this.frameId,
+    required this.packetId,
+    required bool isMetadata,
+    required this.totalPackets,
+    required this.payload,
+    required this.checksum,
+    required this.gridSize,
+    this.bitsPerChannel = 2,
+    this.cells = const [],
+    this.rasterBytes,
+  }) : packetType = isMetadata
+            ? ColorMatrixPacketType.metadata
+            : ColorMatrixPacketType.data;
+
   static const int currentProtocolVersion = 1;
   static const String magic = 'PLCM';
 
@@ -48,7 +86,7 @@ class ColorMatrixFrame {
   final String sessionId;
   final int frameId;
   final int packetId;
-  final bool isMetadata;
+  final ColorMatrixPacketType packetType;
   final int totalPackets;
   final Uint8List payload;
   final int checksum;
@@ -56,6 +94,9 @@ class ColorMatrixFrame {
   final int bitsPerChannel;
   final List<ColorCell> cells;
   final Uint8List? rasterBytes;
+
+  /// Legacy accessor for metadata vs data.
+  bool get isMetadata => packetType.isMetadata;
 
   int get bitsPerCell => bitsPerChannel * 3;
 
@@ -68,7 +109,7 @@ class ColorMatrixFrame {
       sessionId: sessionId,
       frameId: frameId,
       packetId: packetId,
-      isMetadata: isMetadata,
+      packetType: packetType,
       totalPackets: totalPackets,
       payload: payload,
       checksum: checksum,

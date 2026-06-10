@@ -58,6 +58,7 @@ class ReconstructionEngine {
         if (_chunks.containsKey(data.chunkId)) return false;
         _chunks[data.chunkId] = data;
         return true;
+      case ParityPacket():
       case SessionSetupPacket():
       case AckPacket():
       case NakPacket():
@@ -65,6 +66,24 @@ class ReconstructionEngine {
       case ControlPacket():
         return false;
     }
+  }
+
+  /// Injects a recovered data packet (from FEC). Returns true if new.
+  bool injectRecovered(DataPacket data) {
+    if (_metadata == null) return false;
+    if (data.sessionId != _metadata!.sessionId) return false;
+    if (data.totalChunks != _metadata!.totalChunks) return false;
+    if (data.chunkId < 0 || data.chunkId >= _metadata!.totalChunks) {
+      return false;
+    }
+    if (_chunks.containsKey(data.chunkId)) return false;
+    _chunks[data.chunkId] = data;
+    return true;
+  }
+
+  /// Exports received data packets for FEC recovery.
+  Map<int, DataPacket> exportReceivedData() {
+    return Map<int, DataPacket>.from(_chunks);
   }
 
   /// Returns reassembled bytes when all chunks are present, else null.

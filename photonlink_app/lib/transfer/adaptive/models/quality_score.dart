@@ -7,6 +7,7 @@ class QualityScore {
     this.retryFactor = 100,
     this.detectionStabilityFactor = 100,
     this.brightnessFactor = 100,
+    this.recoveryFactor = 100,
   });
 
   final double score;
@@ -15,6 +16,7 @@ class QualityScore {
   final double retryFactor;
   final double detectionStabilityFactor;
   final double brightnessFactor;
+  final double recoveryFactor;
 
   static const QualityScore unknown = QualityScore(score: 50);
 
@@ -25,6 +27,7 @@ class QualityScore {
         'retryFactor': retryFactor,
         'detectionStabilityFactor': detectionStabilityFactor,
         'brightnessFactor': brightnessFactor,
+        'recoveryFactor': recoveryFactor,
       };
 
   factory QualityScore.fromJson(Map<String, dynamic> json) {
@@ -37,6 +40,7 @@ class QualityScore {
       detectionStabilityFactor:
           (json['detectionStabilityFactor'] as num?)?.toDouble() ?? 100,
       brightnessFactor: (json['brightnessFactor'] as num?)?.toDouble() ?? 100,
+      recoveryFactor: (json['recoveryFactor'] as num?)?.toDouble() ?? 100,
     );
   }
 }

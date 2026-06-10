@@ -35,6 +35,17 @@ FrameDiagnostics ───┘         │                        │
 | `LightingCompensationManager` | Brightness/contrast recommendations (no hardware control) |
 | `AdaptationDiagnostics` | Decision log, quality/environment history |
 | `ColorMatrixParameterMapper` | Tiers → gridSize (16/24/32/48), bpc, fps |
+| `FecAdaptationPolicy` | Recommends FEC redundancy adjustments (Phase 7) |
+
+## FEC Integration (Phase 7)
+
+When **Adaptive FEC** is enabled in Settings, `AdaptiveSessionController.evaluateFecAdaptation()` adjusts `FecConfiguration` based on quality score and environment:
+
+- High loss/decode error → increase redundancy tier
+- Clean channel → decrease redundancy tier
+- `FecStatistics` feeds into `QualityScoreCalculator` recovery factor (15% weight when FEC active)
+
+See [FEC_ARCHITECTURE.md](FEC_ARCHITECTURE.md).
 
 ## Transport Profiles
 
@@ -55,6 +66,8 @@ Manual override: Settings → Profile Override (auto/safe/balanced/performance).
 | Retries | 10% |
 | Detection stability | 25% |
 | Brightness conditions | 10% |
+
+When FEC is active, weights renormalize to include **Recovery factor** at 15% (frame loss 20%, decode 25%, retry 8%, detection 22%, brightness 10%).
 
 ## Adaptation Flow
 

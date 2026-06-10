@@ -43,7 +43,11 @@ class TransferRecord {
     this.profileUsed,
     this.adaptiveEventCount = 0,
     this.environmentSummary,
-    this.protocolVersion = 4,
+    this.protocolVersion = 5,
+    this.fecProfile,
+    this.packetsRecovered = 0,
+    this.recoveryRate,
+    this.parityOverhead,
   });
 
   final String id;
@@ -67,4 +71,8 @@ class TransferRecord {
   final int adaptiveEventCount;
   final String? environmentSummary;
   final int protocolVersion;
+  final String? fecProfile;
+  final int packetsRecovered;
+  final double? recoveryRate;
+  final double? parityOverhead;
 }

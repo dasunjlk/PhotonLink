@@ -1,3 +1,5 @@
+import '../../../transfer/fec/models/fec_statistics.dart';
+
 /// Frame-level diagnostics for optical transport (Color Matrix path).
 class FrameDiagnostics {
   const FrameDiagnostics({
@@ -11,6 +13,7 @@ class FrameDiagnostics {
     this.avgDecodeTimeMs = 0.0,
     this.detectionAccuracy = 0.0,
     this.missingPacketCount = 0,
+    this.fec,
   });
 
   final int framesGenerated;
@@ -23,6 +26,7 @@ class FrameDiagnostics {
   final double avgDecodeTimeMs;
   final double detectionAccuracy;
   final int missingPacketCount;
+  final FecStatistics? fec;
 
   FrameDiagnostics copyWith({
     int? framesGenerated,
@@ -35,6 +39,7 @@ class FrameDiagnostics {
     double? avgDecodeTimeMs,
     double? detectionAccuracy,
     int? missingPacketCount,
+    FecStatistics? fec,
   }) {
     return FrameDiagnostics(
       framesGenerated: framesGenerated ?? this.framesGenerated,
@@ -48,6 +53,7 @@ class FrameDiagnostics {
       avgDecodeTimeMs: avgDecodeTimeMs ?? this.avgDecodeTimeMs,
       detectionAccuracy: detectionAccuracy ?? this.detectionAccuracy,
       missingPacketCount: missingPacketCount ?? this.missingPacketCount,
+      fec: fec ?? this.fec,
     );
   }
 
@@ -62,6 +68,7 @@ class FrameDiagnostics {
         'avgDecodeTimeMs': avgDecodeTimeMs,
         'detectionAccuracy': detectionAccuracy,
         'missingPacketCount': missingPacketCount,
+        if (fec != null) 'fec': fec!.toJson(),
       };
 
   factory FrameDiagnostics.fromJson(Map<String, dynamic> json) {
@@ -77,6 +84,9 @@ class FrameDiagnostics {
       avgDecodeTimeMs: (json['avgDecodeTimeMs'] as num?)?.toDouble() ?? 0,
       detectionAccuracy: (json['detectionAccuracy'] as num?)?.toDouble() ?? 0,
       missingPacketCount: json['missingPacketCount'] as int? ?? 0,
+      fec: json['fec'] != null
+          ? FecStatistics.fromJson(json['fec'] as Map<String, dynamic>)
+          : null,
     );
   }
 }

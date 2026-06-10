@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../../protocols/interfaces/reliability/transfer_diagnostics.dart';
 import '../../services/storage/preferences_service.dart';
+import '../fec/models/fec_statistics.dart';
 
 /// Collects and persists frame-level diagnostics (Color Matrix path).
 class FrameDiagnosticsCollector {
@@ -76,6 +77,10 @@ class FrameDiagnosticsCollector {
 
   void updateMissingCount(int count) {
     _current = _current.copyWith(missingPacketCount: count);
+  }
+
+  void updateFecStatistics(FecStatistics stats) {
+    _current = _current.copyWith(fec: stats);
   }
 
   void _updateThroughput() {
