@@ -5,6 +5,7 @@ import '../../protocols/interfaces/compression_type.dart';
 import '../../protocols/transfer_method.dart';
 import '../../services/storage/preferences_service.dart';
 import '../../transfer/adaptive/models/transport_profile.dart';
+import '../../transfer/fec/models/fec_profile.dart';
 import '../../transfer/scheduler/transfer_mode.dart';
 import '../domain/app_settings.dart';
 
@@ -41,6 +42,12 @@ class SettingsRepository {
     final debugOverlay = _prefs.getBool(AppConstants.prefDebugOverlay);
     final experimental =
         _prefs.getBool(AppConstants.prefExperimentalFeatures);
+    final fecEnabled = _prefs.getBool(AppConstants.prefFecEnabled);
+    final fecProfileId = _prefs.getString(AppConstants.prefFecProfile);
+    final redundancyPercent =
+        _prefs.getInt(AppConstants.prefRedundancyPercent);
+    final adaptiveFecEnabled =
+        _prefs.getBool(AppConstants.prefAdaptiveFecEnabled);
 
     return AppSettings(
       themeMode: themeIndex != null
@@ -65,6 +72,10 @@ class SettingsRepository {
       qualityMonitoringEnabled: qualityMonitoring ?? true,
       debugOverlay: debugOverlay ?? false,
       experimentalFeatures: experimental ?? false,
+      fecEnabled: fecEnabled ?? false,
+      fecProfile: FecProfile.fromId(fecProfileId),
+      redundancyPercent: redundancyPercent ?? 10,
+      adaptiveFecEnabled: adaptiveFecEnabled ?? true,
     );
   }
 
@@ -141,6 +152,19 @@ class SettingsRepository {
     await _prefs.setBool(
       AppConstants.prefExperimentalFeatures,
       settings.experimentalFeatures,
+    );
+    await _prefs.setBool(AppConstants.prefFecEnabled, settings.fecEnabled);
+    await _prefs.setString(
+      AppConstants.prefFecProfile,
+      settings.fecProfile.id,
+    );
+    await _prefs.setInt(
+      AppConstants.prefRedundancyPercent,
+      settings.redundancyPercent,
+    );
+    await _prefs.setBool(
+      AppConstants.prefAdaptiveFecEnabled,
+      settings.adaptiveFecEnabled,
     );
   }
 

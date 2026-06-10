@@ -1,3 +1,5 @@
+import '../fec/models/fec_configuration.dart';
+import 'fec_adaptation_policy.dart';
 import 'models/adaptation_decision.dart';
 import 'models/adaptive_parameters.dart';
 import 'models/capability_profile.dart';
@@ -25,6 +27,8 @@ class AdaptiveState {
     this.isActive = false,
     this.processingThrottleMs = 200,
     this.mismatchWarning,
+    this.fecConfiguration = const FecConfiguration(),
+    this.lastFecRecommendation = FecRecommendation.noChange,
   });
 
   final CapabilityProfile capability;
@@ -37,6 +41,8 @@ class AdaptiveState {
   final bool isActive;
   final int processingThrottleMs;
   final String? mismatchWarning;
+  final FecConfiguration fecConfiguration;
+  final FecRecommendation lastFecRecommendation;
 
   AdaptiveState copyWith({
     CapabilityProfile? capability,
@@ -49,6 +55,8 @@ class AdaptiveState {
     bool? isActive,
     int? processingThrottleMs,
     String? mismatchWarning,
+    FecConfiguration? fecConfiguration,
+    FecRecommendation? lastFecRecommendation,
   }) {
     return AdaptiveState(
       capability: capability ?? this.capability,
@@ -61,6 +69,9 @@ class AdaptiveState {
       isActive: isActive ?? this.isActive,
       processingThrottleMs: processingThrottleMs ?? this.processingThrottleMs,
       mismatchWarning: mismatchWarning,
+      fecConfiguration: fecConfiguration ?? this.fecConfiguration,
+      lastFecRecommendation:
+          lastFecRecommendation ?? this.lastFecRecommendation,
     );
   }
 }

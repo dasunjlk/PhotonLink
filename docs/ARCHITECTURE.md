@@ -2,7 +2,7 @@
 
 ## Overview
 
-PhotonLink is an offline peer-to-peer file transfer platform using optical communication (QR codes, color matrices). **Phase 4** adds compression, encryption, scheduling, and throughput monitoring on the reliable bidirectional QR transport. **Phase 5** adds **Color Matrix** as a second registered transport via a transport-agnostic protocol stack. **Phase 6** adds the **Adaptive Optical Engine** for capability/environment-aware parameter tuning.
+PhotonLink is an offline peer-to-peer file transfer platform using optical communication (QR codes, color matrices). **Phase 4** adds compression, encryption, scheduling, and throughput monitoring on the reliable bidirectional QR transport. **Phase 5** adds **Color Matrix** as a second registered transport via a transport-agnostic protocol stack. **Phase 6** adds the **Adaptive Optical Engine** for capability/environment-aware parameter tuning. **Phase 7** adds **Forward Error Correction** (Reed-Solomon parity packets) for loss recovery without retransmission.
 
 ## Layer Diagram
 
@@ -14,7 +14,7 @@ PhotonLink is an offline peer-to-peer file transfer platform using optical commu
 │  transfer/  core (chunking, payload pipeline, integrity) │
 │             compression · encryption · security          │
 │             scheduler · metrics · reliability          │
-│             qr/ · color_matrix/ · adaptive/ · diagnostics/ │
+│             qr/ · color_matrix/ · adaptive/ · fec/ · diagnostics/ │
 │             application (Riverpod controllers)         │
 ├──────────────────────────────────────────────────────────┤
 │  protocols/ interfaces + transport_registry + impl       │
@@ -113,6 +113,19 @@ See [ADAPTIVE_ENGINE.md](ADAPTIVE_ENGINE.md) and [PHASE6_PERFORMANCE.md](PHASE6_
 | `colorMatrixSenderControllerProvider` | Color Matrix | Cyclic frame stream |
 | `colorMatrixReceiverControllerProvider` | Color Matrix | Camera decode → reconstruct |
 
+## Forward Error Correction (Phase 7)
+
+Transport-independent FEC layer in `transfer/fec/`:
+
+| Component | Role |
+|-----------|------|
+| `FecEncoder` / `FecDecoder` | Reed-Solomon parity generation and recovery |
+| `RecoveryEngine` | Orchestrates recovery; falls back to NAK/retry (QR) |
+| `ParityPacket` | New sealed packet type (PL2 `P`, PLCM type 2) |
+| `ErasureCode` | Interface for future Fountain codes |
+
+See [FEC_ARCHITECTURE.md](FEC_ARCHITECTURE.md) and [PHASE7_PERFORMANCE.md](PHASE7_PERFORMANCE.md).
+
 ## State Machine
 
 `lib/transfer/state/transfer_phase.dart` — 13 phases including `awaitingAcknowledgements`, `recoveringMissingPackets`, `reconstructing`. QR controllers enforce transitions via `TransferStateMachine`. Color Matrix controllers use a subset of phases.
@@ -129,8 +142,8 @@ See [ADAPTIVE_ENGINE.md](ADAPTIVE_ENGINE.md) and [PHASE6_PERFORMANCE.md](PHASE6_
 
 Run: `cd photonlink_app && flutter test`
 
-Includes Phase 3–4 QR reliability, compression, encryption, pipeline, scheduler, throughput, plus Color Matrix encode/decode/generation/detection tests. See [AUDIT_PHASE1-5.md](AUDIT_PHASE1-5.md) for coverage gaps and remediation status.
+Includes Phase 3–7 tests: QR reliability, compression, encryption, adaptive engine, FEC (13+ tests), Color Matrix encode/decode. **100 automated tests** total.
 
 ## Future Transports
 
-`Transport<T>` abstraction supports `opticalStream`, `audio`, `flash` without changing the core pipeline. Adaptive engine tiers are reusable by future transports. See [PHASE7_READINESS.md](PHASE7_READINESS.md).
+`Transport<T>` abstraction supports `opticalStream`, `audio`, `flash` without changing the core pipeline. Adaptive engine and FEC layers are reusable by future transports. See [PHASE8_READINESS.md](PHASE8_READINESS.md).

@@ -200,6 +200,18 @@ class _HistoryTile extends StatelessWidget {
               ),
             if (record.failureReason != null)
               Text('Failure: ${record.failureReason}'),
+            if (record.fecProfile != null)
+              Text('FEC Profile: ${record.fecProfile}'),
+            if (record.packetsRecovered > 0)
+              Text('Packets Recovered: ${record.packetsRecovered}'),
+            if (record.recoveryRate != null)
+              Text(
+                'Recovery Rate: ${(record.recoveryRate! * 100).toStringAsFixed(1)}%',
+              ),
+            if (record.parityOverhead != null)
+              Text(
+                'Parity Overhead: ${record.parityOverhead!.toStringAsFixed(2)}',
+              ),
           ],
         ),
         actions: [

@@ -4,6 +4,7 @@ import '../../protocols/interfaces/reliability/transfer_diagnostics.dart';
 import '../../settings/application/settings_controller.dart';
 import 'adaptation_diagnostics.dart';
 import 'adaptation_engine.dart';
+import 'fec_adaptation_policy.dart';
 import 'models/adaptation_decision.dart';
 import 'adaptive_state.dart';
 import 'device_capability_detector.dart';
@@ -14,6 +15,9 @@ import 'models/adaptive_tiers.dart';
 import 'models/transport_profile.dart';
 import 'parameter_mappers/color_matrix_parameter_mapper.dart';
 import 'quality_score_calculator.dart';
+import '../fec/fec_configuration_factory.dart';
+import '../fec/models/fec_configuration.dart';
+import '../fec/models/fec_statistics.dart';
 
 /// Orchestrates adaptive engine components for a transfer session.
 class AdaptiveSessionController {
@@ -41,6 +45,10 @@ class AdaptiveSessionController {
   final LightingCompensationManager _lighting;
   final ColorMatrixParameterMapper _mapper;
   final AdaptationDiagnostics _adaptDiagnostics;
+  final FecAdaptationPolicy _fecPolicy = const FecAdaptationPolicy();
+  final FecConfigurationFactory _fecFactory = const FecConfigurationFactory();
+
+  FecStatistics? _fecStats;
 
   AdaptationEngine _senderEngine = AdaptationEngine();
   AdaptationEngine _receiverEngine =
@@ -107,13 +115,45 @@ class AdaptiveSessionController {
     _receiverEngine.setInitialParameters(initial);
 
     final mapped = _mapper.map(initial);
+    final fecConfig = _fecFactory.fromSettings(settings);
     _state = AdaptiveState(
       capability: capability,
       parameters: initial,
       mapped: mapped,
       isActive: settings.adaptiveModeEnabled,
       processingThrottleMs: _throttleForTier(initial),
+      fecConfiguration: fecConfig,
     );
+  }
+
+  FecConfiguration get fecConfiguration => _state.fecConfiguration;
+
+  void updateFecStatistics(FecStatistics stats) {
+    _fecStats = stats;
+  }
+
+  FecConfiguration evaluateFecAdaptation() {
+    final settings = ref.read(settingsProvider);
+    if (!settings.adaptiveFecEnabled || !settings.fecEnabled) {
+      return _state.fecConfiguration;
+    }
+
+    final recommendation = _fecPolicy.evaluate(
+      current: _state.fecConfiguration,
+      qualityScore: _state.qualityScore,
+      environment: _state.environment,
+    );
+
+    final updated = _fecPolicy.applyRecommendation(
+      current: _state.fecConfiguration,
+      recommendation: recommendation,
+    );
+
+    _state = _state.copyWith(
+      fecConfiguration: updated,
+      lastFecRecommendation: recommendation,
+    );
+    return updated;
   }
 
   ColorMatrixMappedParameters getSessionStartParams() => _state.mapped;
@@ -144,6 +184,7 @@ class AdaptiveSessionController {
     final quality = _qualityCalculator.calculate(
       diagnostics: diag,
       environment: env,
+      fecStats: _fecStats,
     );
     _adaptDiagnostics.recordQualityScore(quality);
     _adaptDiagnostics.recordEnvironment(env);
@@ -187,6 +228,7 @@ class AdaptiveSessionController {
     final quality = _qualityCalculator.calculate(
       diagnostics: diag,
       environment: env,
+      fecStats: _fecStats,
     );
 
     _senderEngine.configure(
@@ -245,6 +287,7 @@ class AdaptiveSessionController {
     _adaptDiagnostics.reset();
     _senderEngine.reset();
     _receiverEngine.reset();
+    _fecStats = null;
     _state = const AdaptiveState();
   }
 }

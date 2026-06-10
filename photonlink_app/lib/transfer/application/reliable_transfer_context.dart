@@ -20,6 +20,10 @@ import '../scheduler/transfer_scheduler.dart';
 import '../security/encryption_key_provider.dart';
 import '../security/key_exchange.dart';
 import '../security/session_key_exchange.dart';
+import '../../settings/domain/app_settings.dart';
+import '../fec/fec_configuration_factory.dart';
+import '../fec/models/fec_configuration.dart';
+import '../fec/recovery_engine.dart';
 import '../state/transfer_phase.dart';
 import '../state/transfer_state_machine.dart';
 
@@ -42,6 +46,7 @@ class ReliableTransferContext {
     EncryptionKeyProvider? keyProvider,
     TransferScheduler? scheduler,
     ThroughputMonitor? throughputMonitor,
+    RecoveryEngine? fecRecovery,
   })  : stateMachine = stateMachine ?? TransferStateMachine(role: role),
         tracker = tracker ?? MissingPacketTrackerImpl(),
         ackManager = ackManager ?? AcknowledgementManagerImpl(),
@@ -56,7 +61,8 @@ class ReliableTransferContext {
         keyExchange = keyExchange ?? SessionKeyExchange(),
         keyProvider = keyProvider ?? EncryptionKeyProvider(),
         scheduler = scheduler ?? const TransferScheduler(),
-        throughput = throughputMonitor ?? ThroughputMonitor();
+        throughput = throughputMonitor ?? ThroughputMonitor(),
+        fecRecovery = fecRecovery ?? RecoveryEngine();
 
   final TransferRole role;
   final TransferStateMachine stateMachine;
@@ -74,21 +80,35 @@ class ReliableTransferContext {
   final EncryptionKeyProvider keyProvider;
   final TransferScheduler scheduler;
   final ThroughputMonitor throughput;
+  final RecoveryEngine fecRecovery;
 
   MetadataPacket? metadata;
   SessionSetupPacket? setupPacket;
   int roundNumber = 0;
   bool isFinalizing = false;
+  bool paritySent = false;
+
+  static final _fecFactory = FecConfigurationFactory();
 
   void reset() {
     metadata = null;
     setupPacket = null;
     roundNumber = 0;
     isFinalizing = false;
+    paritySent = false;
     stateMachine.forcePhase(TransferPhase.idle);
     diagnostics.reset();
     throughput.reset();
     keyProvider.clear();
+    fecRecovery.reset();
+  }
+
+  void configureFec(FecConfiguration config) {
+    fecRecovery.configure(config);
+  }
+
+  FecConfiguration fecFromSettings(AppSettings settings) {
+    return _fecFactory.fromSettings(settings);
   }
 
   void bindSession(MetadataPacket meta) {

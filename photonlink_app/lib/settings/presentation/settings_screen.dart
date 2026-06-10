@@ -10,6 +10,7 @@ import '../../ui/spacing.dart';
 import '../../transfer/adaptive/adaptive_engine_providers.dart';
 import '../../transfer/adaptive/diagnostics_export.dart';
 import '../../transfer/adaptive/models/transport_profile.dart';
+import '../../transfer/fec/models/fec_profile.dart';
 import '../../transfer/application/transfer_providers.dart';
 import '../../transfer/scheduler/transfer_mode.dart';
 import '../application/settings_controller.dart';
@@ -222,6 +223,74 @@ class SettingsScreen extends ConsumerWidget {
                         title: const Text('Export Diagnostics'),
                         subtitle: const Text('Save adaptive metrics as JSON'),
                         onTap: () => _exportDiagnostics(context, ref),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                const SectionHeader(
+                  title: 'Error Correction (FEC)',
+                  subtitle: 'Phase 7 Reed-Solomon recovery',
+                ),
+                GlassCard(
+                  child: Column(
+                    children: [
+                      SwitchListTile(
+                        title: const Text('FEC Enabled'),
+                        subtitle: const Text(
+                          'Generate parity packets for loss recovery',
+                        ),
+                        value: settings.fecEnabled,
+                        onChanged: controller.toggleFecEnabled,
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        title: const Text('FEC Profile'),
+                        subtitle: Text(settings.fecProfile.label),
+                        trailing: DropdownButton<FecProfile>(
+                          value: settings.fecProfile,
+                          underline: const SizedBox.shrink(),
+                          items: FecProfile.values
+                              .map(
+                                (p) => DropdownMenuItem(
+                                  value: p,
+                                  child: Text(p.label),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (p) {
+                            if (p != null) controller.updateFecProfile(p);
+                          },
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        title: const Text('Redundancy'),
+                        subtitle: Text('${settings.redundancyPercent}%'),
+                        trailing: SizedBox(
+                          width: 160,
+                          child: Slider(
+                            value: settings.redundancyPercent.toDouble(),
+                            min: 5,
+                            max: 30,
+                            divisions: 5,
+                            label: '${settings.redundancyPercent}%',
+                            onChanged: settings.fecProfile == FecProfile.auto
+                                ? (v) => controller.updateRedundancyPercent(
+                                      v.round(),
+                                    )
+                                : null,
+                          ),
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      SwitchListTile(
+                        title: const Text('Adaptive FEC'),
+                        subtitle: const Text(
+                          'Adjust redundancy based on channel quality',
+                        ),
+                        value: settings.adaptiveFecEnabled,
+                        onChanged: controller.toggleAdaptiveFec,
                       ),
                     ],
                   ),

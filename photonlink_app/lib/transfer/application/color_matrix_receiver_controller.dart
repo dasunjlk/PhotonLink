@@ -22,6 +22,8 @@ import '../core/integrity_verifier.dart';
 import '../core/payload_pipeline.dart';
 import '../core/reconstruction_engine.dart';
 import '../core/transfer_limits.dart';
+import '../fec/fec_configuration_factory.dart';
+import '../fec/recovery_engine.dart';
 import '../diagnostics/diagnostics_collector.dart';
 import '../security/encryption_key_provider.dart';
 import '../security/session_key_exchange.dart';
@@ -31,6 +33,8 @@ import 'transfer_providers.dart';
 /// Color Matrix receiver: camera frames → decode → reconstruct → restore.
 class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
   final _recon = ReconstructionEngine();
+  final _fecRecovery = RecoveryEngine();
+  final _fecFactory = const FecConfigurationFactory();
   final _keyProvider = EncryptionKeyProvider();
   final _keyExchange = SessionKeyExchange();
   late FrameDiagnosticsCollector _diagnostics;
@@ -68,6 +72,7 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
     final mapped = adaptive.getSessionStartParams();
 
     final settings = ref.read(settingsProvider);
+    _fecRecovery.configure(_fecFactory.fromSettings(settings));
     _sessionTransport = ColorMatrixTransport(
       gridSize: mapped.gridSize,
       bitsPerChannel: mapped.bitsPerChannel,
@@ -117,7 +122,7 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
     _diagnostics.recordDetectionAccuracy(detectionAccuracy);
     final stopwatch = Stopwatch()..start();
 
-    final transport = _sessionTransport ??
+    final ColorMatrixTransport transport = _sessionTransport ??
         ref.read(colorMatrixTransportProvider);
     final packet = transport.decoder.decodeFrame(raw);
     stopwatch.stop();
@@ -149,6 +154,8 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
         );
       case DataPacket data:
         unawaited(_handleData(data, detectionAccuracy: detectionAccuracy));
+      case ParityPacket parity:
+        _handleParity(parity, detectionAccuracy: detectionAccuracy);
       default:
         break;
     }
@@ -158,7 +165,7 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
     MetadataPacket metadata, {
     required double detectionAccuracy,
   }) async {
-    final transport = _sessionTransport ??
+    final ColorMatrixTransport transport = _sessionTransport ??
         ref.read(colorMatrixTransportProvider);
     try {
       TransferLimits.validateMetadata(
@@ -265,8 +272,45 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
     );
     _syncDiagnostics(detectionAccuracy: detectionAccuracy);
 
+    if (!_recon.isComplete) {
+      await _attemptFecRecovery();
+    }
+
     if (_recon.isComplete) {
       await _finalize();
+    }
+  }
+
+  void _handleParity(
+    ParityPacket parity, {
+    required double detectionAccuracy,
+  }) {
+    if (!_recon.hasMetadata) {
+      _syncDiagnostics(detectionAccuracy: detectionAccuracy);
+      return;
+    }
+    if (_fecRecovery.ingestParity(parity)) {
+      _diagnostics.recordFrameReceived(payloadBytes: parity.payload.length);
+    }
+    _syncDiagnostics(detectionAccuracy: detectionAccuracy);
+  }
+
+  Future<void> _attemptFecRecovery() async {
+    if (!_fecRecovery.config.enabled || !_recon.hasMetadata) return;
+
+    final result = _fecRecovery.attemptRecovery(_recon);
+    if (result.recoveredCount > 0) {
+      _diagnostics.updateFecStatistics(_fecRecovery.statistics);
+      ref.read(colorMatrixReceiverAdaptiveProvider)
+          .updateFecStatistics(_fecRecovery.statistics);
+
+      final missing = _recon.totalChunks - _recon.receivedCount;
+      _diagnostics.updateMissingCount(missing);
+      state = state.copyWith(
+        receivedChunks: _recon.receivedCount,
+        progress: _recon.progress,
+        missingChunks: missing,
+      );
     }
   }
 
@@ -274,6 +318,8 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
     if (_finalizing) return;
     _finalizing = true;
     state = state.copyWith(phase: TransferPhase.reconstructing);
+
+    await _attemptFecRecovery();
 
     try {
       final wireBytes = _recon.rebuild();
@@ -344,7 +390,11 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
                 adaptiveEventCount:
                     adaptive.diagnostics.appliedDecisionCount,
                 environmentSummary: adaptive.state.environment.summary,
-                protocolVersion: 4,
+                protocolVersion: 5,
+                fecProfile: _fecRecovery.config.profile.id,
+                packetsRecovered: _fecRecovery.statistics.packetsRecovered,
+                recoveryRate: _fecRecovery.statistics.recoverySuccessRate,
+                parityOverhead: _fecRecovery.statistics.fecOverhead,
               ),
             );
       }
@@ -422,6 +472,7 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
 
   void reset() {
     _recon.reset();
+    _fecRecovery.reset();
     _keyProvider.clear();
     _diagnostics.reset();
     _finalizing = false;

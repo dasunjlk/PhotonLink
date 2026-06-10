@@ -8,6 +8,7 @@ import '../../protocols/interfaces/transfer_decoder.dart';
 import '../../protocols/interfaces/transfer_encoder.dart';
 import '../../protocols/interfaces/transfer_packet.dart';
 import '../core/transfer_limits.dart';
+import '../fec/parity_payload_codec.dart';
 import '../serialization/packet_id_ranges.dart';
 
 /// QR wire format: PL2|<type>|<sessionId>|<seq>|<total>|<base64Payload>
@@ -82,6 +83,10 @@ class QrFrameCodec implements TransferEncoder<String>, TransferDecoder<String> {
         });
         final b64 = base64Encode(utf8.encode(jsonPayload));
         return '$magic|H|${handshake.sessionId}|0|${handshake.receivedChunkIds.length}|$b64';
+      case ParityPacket parity:
+        final jsonPayload = jsonEncode(ParityPayloadCodec.toJson(parity));
+        final b64 = base64Encode(utf8.encode(jsonPayload));
+        return '$magic|P|${parity.sessionId}|${parity.parityId}|${parity.totalParity}|$b64';
       case ControlPacket control:
         final jsonPayload = jsonEncode({
           'type': control.type.name,
@@ -212,6 +217,10 @@ class QrFrameCodec implements TransferEncoder<String>, TransferDecoder<String> {
                   DateTime.now().toIso8601String(),
             ),
           );
+        case 'P':
+          final jsonStrP = utf8.decode(payloadBytes);
+          final jsonMapP = jsonDecode(jsonStrP) as Map<String, dynamic>;
+          return ParityPayloadCodec.fromJson(sessionId, jsonMapP);
         case 'C':
           final jsonStrC = utf8.decode(payloadBytes);
           final jsonMap = jsonDecode(jsonStrC) as Map<String, dynamic>;
