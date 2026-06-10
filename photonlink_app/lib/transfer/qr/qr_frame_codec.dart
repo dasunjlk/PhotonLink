@@ -12,7 +12,7 @@ import '../serialization/packet_id_ranges.dart';
 
 /// QR wire format: PL2|<type>|<sessionId>|<seq>|<total>|<base64Payload>
 /// Types: S setup, M metadata, D data, A ack, N nak, H handshake, C control
-class QrFrameCodec implements TransferEncoder, TransferDecoder {
+class QrFrameCodec implements TransferEncoder<String>, TransferDecoder<String> {
   const QrFrameCodec();
 
   static const String magic = 'PL2';

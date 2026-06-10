@@ -27,7 +27,7 @@ abstract final class QrTransferLimits {
     String sessionId,
     MetadataPacket metadata,
     List<DataPacket> dataPackets,
-    TransferEncoder encoder,
+    TransferEncoder<String> encoder,
   ) {
     for (final packet in dataPackets) {
       final frame = encoder.encodeFrame(packet);
@@ -44,7 +44,7 @@ abstract final class QrTransferLimits {
     required String sessionId,
     required Uint8List fileBytes,
     required ChunkManager chunkManager,
-    TransferEncoder encoder = const QrFrameCodec(),
+    TransferEncoder<String> encoder = const QrFrameCodec(),
   }) {
     var chunkSize = ChunkManager.defaultChunkSize;
     while (chunkSize >= TransferLimits.minChunkSize) {

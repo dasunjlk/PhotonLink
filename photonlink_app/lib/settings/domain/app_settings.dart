@@ -16,6 +16,11 @@ class AppSettings {
     this.diagnosticsEnabled = true,
     this.preferredMethod = TransferMethod.qr,
     this.cameraResolution = 'high',
+    this.colorMatrixSize = 24,
+    this.colorTransferFrameRate = 4.0,
+    this.colorTransportQuality = 'balanced',
+    this.debugOverlay = false,
+    this.experimentalFeatures = false,
   });
 
   final ThemeMode themeMode;
@@ -27,6 +32,11 @@ class AppSettings {
   final bool diagnosticsEnabled;
   final TransferMethod preferredMethod;
   final String cameraResolution;
+  final int colorMatrixSize;
+  final double colorTransferFrameRate;
+  final String colorTransportQuality;
+  final bool debugOverlay;
+  final bool experimentalFeatures;
 
   CompressionType get effectiveCompression =>
       compressionEnabled ? compressionMode : CompressionType.none;
@@ -41,6 +51,11 @@ class AppSettings {
     bool? diagnosticsEnabled,
     TransferMethod? preferredMethod,
     String? cameraResolution,
+    int? colorMatrixSize,
+    double? colorTransferFrameRate,
+    String? colorTransportQuality,
+    bool? debugOverlay,
+    bool? experimentalFeatures,
   }) {
     return AppSettings(
       themeMode: themeMode ?? this.themeMode,
@@ -52,6 +67,13 @@ class AppSettings {
       diagnosticsEnabled: diagnosticsEnabled ?? this.diagnosticsEnabled,
       preferredMethod: preferredMethod ?? this.preferredMethod,
       cameraResolution: cameraResolution ?? this.cameraResolution,
+      colorMatrixSize: colorMatrixSize ?? this.colorMatrixSize,
+      colorTransferFrameRate:
+          colorTransferFrameRate ?? this.colorTransferFrameRate,
+      colorTransportQuality:
+          colorTransportQuality ?? this.colorTransportQuality,
+      debugOverlay: debugOverlay ?? this.debugOverlay,
+      experimentalFeatures: experimentalFeatures ?? this.experimentalFeatures,
     );
   }
 }

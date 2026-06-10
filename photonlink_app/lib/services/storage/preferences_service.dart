@@ -20,6 +20,11 @@ class PreferencesService {
 
   Future<bool> setInt(String key, int value) => _prefs.setInt(key, value);
 
+  double? getDouble(String key) => _prefs.getDouble(key);
+
+  Future<bool> setDouble(String key, double value) =>
+      _prefs.setDouble(key, value);
+
   Future<bool> remove(String key) => _prefs.remove(key);
 }
 

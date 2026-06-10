@@ -7,7 +7,7 @@ import 'package:photonlink_app/transfer/core/reconstruction_engine.dart';
 import 'package:photonlink_app/transfer/core/session_factory.dart';
 
 void main() {
-  test('rebuilds file from out-of-order packets', () {
+  test('rebuilds file from out-of-order packets', () async {
     const engine = ChunkingEngine();
     final factory = SessionFactory(chunkManager: engine);
     final bytes = Uint8List.fromList(List.generate(800, (i) => i % 256));
@@ -30,7 +30,7 @@ void main() {
     expect(recon.rebuild(), bytes);
   });
 
-  test('duplicate packets are ignored', () {
+  test('duplicate packets are ignored', () async {
     const engine = ChunkingEngine();
     final factory = SessionFactory(chunkManager: engine);
     final bytes = Uint8List.fromList([1, 2, 3, 4, 5]);

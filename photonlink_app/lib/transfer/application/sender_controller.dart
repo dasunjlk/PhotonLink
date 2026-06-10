@@ -15,6 +15,7 @@ import '../../settings/application/settings_controller.dart';
 import '../../settings/domain/app_settings.dart';
 import '../security/key_exchange.dart';
 import '../core/integrity_verifier.dart';
+import '../core/platform_file_reader.dart';
 import '../core/payload_pipeline.dart';
 import '../core/session_factory.dart';
 import '../core/transfer_limits.dart';
@@ -48,9 +49,10 @@ class SenderController extends Notifier<SenderTransferState> {
   AppSettings get _settings => ref.read(settingsProvider);
 
   Future<void> prepareTransfer({
-    required String filePath,
     required String fileName,
     required String? extension,
+    String? filePath,
+    Uint8List? fileBytes,
   }) async {
     _ctx.reset();
     _transition(TransferPhase.preparing);
@@ -66,9 +68,11 @@ class SenderController extends Notifier<SenderTransferState> {
           'Unsupported file type. Supported: txt, pdf, jpg, png, zip',
         );
       }
-      final file = File(filePath);
-      TransferLimits.validateFileSize(await file.length());
-      final bytes = Uint8List.fromList(await file.readAsBytes());
+      final bytes = await loadFileBytes(
+        fileBytes: fileBytes,
+        filePath: filePath,
+      );
+      TransferLimits.validateFileSize(bytes.length);
 
       final compression = _settings.effectiveCompression;
       final encryption = _settings.encryptionEnabled
