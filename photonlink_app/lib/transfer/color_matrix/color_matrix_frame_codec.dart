@@ -6,6 +6,7 @@ import '../../protocols/interfaces/encryption_mode.dart';
 import '../../protocols/interfaces/transfer_decoder.dart';
 import '../../protocols/interfaces/transfer_encoder.dart';
 import '../../protocols/interfaces/transfer_packet.dart';
+import '../fec/parity_payload_codec.dart';
 import 'color_decoder.dart';
 import 'color_encoder.dart';
 import 'color_matrix_frame.dart';
@@ -44,13 +45,13 @@ class ColorMatrixFrameCodec
   ColorMatrixFrame encodeFrame(TransferPacket packet) {
     final frameId = _frameCounter++;
     late final Uint8List payload;
-    late final bool isMetadata;
+    late final ColorMatrixPacketType packetType;
     late final int packetId;
     late final int totalPackets;
 
     switch (packet) {
       case MetadataPacket metadata:
-        isMetadata = true;
+        packetType = ColorMatrixPacketType.metadata;
         packetId = 0;
         totalPackets = metadata.totalChunks;
         payload = Uint8List.fromList(
@@ -64,10 +65,15 @@ class ColorMatrixFrameCodec
           ),
         );
       case DataPacket data:
-        isMetadata = false;
+        packetType = ColorMatrixPacketType.data;
         packetId = data.chunkId;
         totalPackets = data.totalChunks;
         payload = data.payload;
+      case ParityPacket parity:
+        packetType = ColorMatrixPacketType.parity;
+        packetId = parity.parityId;
+        totalPackets = parity.totalParity;
+        payload = ParityPayloadCodec.encodeBytes(parity);
       default:
         throw StateError('Unsupported packet type for Color Matrix: $packet');
     }
@@ -78,7 +84,7 @@ class ColorMatrixFrameCodec
         sessionId: packet.sessionId,
         frameId: frameId,
         packetId: packetId,
-        isMetadata: isMetadata,
+        packetType: packetType,
         totalPackets: totalPackets,
         payload: payload,
         checksum: 0,
@@ -103,7 +109,7 @@ class ColorMatrixFrameCodec
       sessionId: packet.sessionId,
       frameId: frameId,
       packetId: packetId,
-      isMetadata: isMetadata,
+      packetType: packetType,
       totalPackets: totalPackets,
       payload: payload,
       checksum: decoded?.checksum ?? 0,
@@ -134,7 +140,7 @@ class ColorMatrixFrameCodec
       // Allow session from detected frame header
     }
 
-    if (frame.isMetadata) {
+    if (frame.packetType == ColorMatrixPacketType.metadata) {
       try {
         final jsonStr = utf8.decode(frame.payload);
         final map = jsonDecode(jsonStr) as Map<String, dynamic>;
@@ -143,6 +149,10 @@ class ColorMatrixFrameCodec
       } catch (_) {
         return null;
       }
+    }
+
+    if (frame.packetType == ColorMatrixPacketType.parity) {
+      return ParityPayloadCodec.decodeBytes(frame.sessionId, frame.payload);
     }
 
     return DataPacket(

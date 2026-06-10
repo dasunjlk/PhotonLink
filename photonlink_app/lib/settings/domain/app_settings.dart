@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../protocols/transfer_method.dart';
 import '../../transfer/adaptive/models/transport_profile.dart';
+import '../../transfer/fec/models/fec_profile.dart';
 import '../../transfer/scheduler/transfer_mode.dart';
 import '../../protocols/interfaces/compression_type.dart';
 
@@ -27,6 +28,10 @@ class AppSettings {
     this.qualityMonitoringEnabled = true,
     this.debugOverlay = false,
     this.experimentalFeatures = false,
+    this.fecEnabled = false,
+    this.fecProfile = FecProfile.balanced,
+    this.redundancyPercent = 10,
+    this.adaptiveFecEnabled = true,
   });
 
   final ThemeMode themeMode;
@@ -48,6 +53,10 @@ class AppSettings {
   final bool qualityMonitoringEnabled;
   final bool debugOverlay;
   final bool experimentalFeatures;
+  final bool fecEnabled;
+  final FecProfile fecProfile;
+  final int redundancyPercent;
+  final bool adaptiveFecEnabled;
 
   CompressionType get effectiveCompression =>
       compressionEnabled ? compressionMode : CompressionType.none;
@@ -72,6 +81,10 @@ class AppSettings {
     bool? qualityMonitoringEnabled,
     bool? debugOverlay,
     bool? experimentalFeatures,
+    bool? fecEnabled,
+    FecProfile? fecProfile,
+    int? redundancyPercent,
+    bool? adaptiveFecEnabled,
   }) {
     return AppSettings(
       themeMode: themeMode ?? this.themeMode,
@@ -97,6 +110,10 @@ class AppSettings {
           qualityMonitoringEnabled ?? this.qualityMonitoringEnabled,
       debugOverlay: debugOverlay ?? this.debugOverlay,
       experimentalFeatures: experimentalFeatures ?? this.experimentalFeatures,
+      fecEnabled: fecEnabled ?? this.fecEnabled,
+      fecProfile: fecProfile ?? this.fecProfile,
+      redundancyPercent: redundancyPercent ?? this.redundancyPercent,
+      adaptiveFecEnabled: adaptiveFecEnabled ?? this.adaptiveFecEnabled,
     );
   }
 }

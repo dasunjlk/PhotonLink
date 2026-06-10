@@ -127,6 +127,7 @@ class SenderController extends Notifier<SenderTransferState> {
 
       _ctx.setupPacket = setup;
       _ctx.bindSession(_bundle!.metadata);
+      _ctx.configureFec(_ctx.fecFromSettings(_settings));
       _ctx.diagnostics.setCompressionStats(
         savingsBytes: prepared.originalSize - prepared.wireBytes.length,
         ratio: prepared.compressionRatio,
@@ -299,10 +300,24 @@ class SenderController extends Notifier<SenderTransferState> {
 
     final toSend = _ctx.packetsForIds(_bundle!.dataPackets, missing);
     final mode = _settings.transferMode;
-    final queue = _ctx.scheduler.buildDataRoundQueue(
+    var queue = _ctx.scheduler.buildDataRoundQueue(
       packetsToSend: toSend,
       sessionId: _bundle!.session.id,
     );
+
+    if (!_ctx.paritySent &&
+        _ctx.fecRecovery.config.enabled &&
+        missing.length >= _bundle!.metadata.totalChunks) {
+      final parity = _ctx.fecRecovery.generateParity(
+        dataPackets: _bundle!.dataPackets,
+        sessionId: _bundle!.session.id,
+        totalChunks: _bundle!.metadata.totalChunks,
+      );
+      if (parity.isNotEmpty) {
+        queue = [...queue, ...parity];
+        _ctx.paritySent = true;
+      }
+    }
 
     _ctx.roundNumber++;
     _transition(TransferPhase.transmitting);

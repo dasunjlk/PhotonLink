@@ -4,12 +4,13 @@ import '../../protocols/transfer_method.dart';
 import '../../services/storage/preferences_service.dart';
 import '../domain/transfer_record.dart';
 
-/// SharedPreferences-backed transfer history (v4 schema).
+/// SharedPreferences-backed transfer history (v5 schema with FEC fields).
 class PersistentHistoryRepository {
   PersistentHistoryRepository(this._prefs);
 
   final PreferencesService _prefs;
-  static const _storageKey = 'transfer_history_v4';
+  static const _storageKey = 'transfer_history_v5';
+  static const _legacyV4Key = 'transfer_history_v4';
   static const _legacyV3Key = 'transfer_history_v3';
   static const _legacyV2Key = 'transfer_history_v2';
 
@@ -32,7 +33,7 @@ class PersistentHistoryRepository {
 
   Future<void> _migrateFromLegacyIfNeeded() async {
     if (_prefs.getString(_storageKey) != null) return;
-    for (final key in [_legacyV3Key, _legacyV2Key]) {
+    for (final key in [_legacyV4Key, _legacyV3Key, _legacyV2Key]) {
       final legacy = _prefs.getString(key);
       if (legacy == null || legacy.isEmpty) continue;
       try {
@@ -150,6 +151,10 @@ class PersistentHistoryRepository {
         if (r.environmentSummary != null)
           'environmentSummary': r.environmentSummary,
         'protocolVersion': r.protocolVersion,
+        if (r.fecProfile != null) 'fecProfile': r.fecProfile,
+        'packetsRecovered': r.packetsRecovered,
+        if (r.recoveryRate != null) 'recoveryRate': r.recoveryRate,
+        if (r.parityOverhead != null) 'parityOverhead': r.parityOverhead,
       };
 
   static TransferRecord _recordFromJson(Map<String, dynamic> json) {
@@ -185,6 +190,10 @@ class PersistentHistoryRepository {
       adaptiveEventCount: json['adaptiveEventCount'] as int? ?? 0,
       environmentSummary: json['environmentSummary'] as String?,
       protocolVersion: json['protocolVersion'] as int? ?? 1,
+      fecProfile: json['fecProfile'] as String?,
+      packetsRecovered: json['packetsRecovered'] as int? ?? 0,
+      recoveryRate: (json['recoveryRate'] as num?)?.toDouble(),
+      parityOverhead: (json['parityOverhead'] as num?)?.toDouble(),
     );
   }
 
