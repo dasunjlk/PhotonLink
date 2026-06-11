@@ -2,7 +2,7 @@
 
 ## Overview
 
-PhotonLink is an offline peer-to-peer file transfer platform using optical communication (QR codes, color matrices). **Phase 4** adds compression, encryption, scheduling, and throughput monitoring on the reliable bidirectional QR transport. **Phase 5** adds **Color Matrix** as a second registered transport via a transport-agnostic protocol stack. **Phase 6** adds the **Adaptive Optical Engine** for capability/environment-aware parameter tuning. **Phase 7** adds **Forward Error Correction** (Reed-Solomon parity packets) for loss recovery without retransmission.
+PhotonLink is an offline peer-to-peer file transfer platform using optical communication (QR codes, color matrices). **Phase 4** adds compression, encryption, scheduling, and throughput monitoring on the reliable bidirectional QR transport. **Phase 5** adds **Color Matrix** as a second registered transport via a transport-agnostic protocol stack. **Phase 6** adds the **Adaptive Optical Engine** for capability/environment-aware parameter tuning. **Phase 7** adds **Forward Error Correction** (Reed-Solomon parity packets) for loss recovery without retransmission. **Phase 8** adds a **Rust core engine** (`photonlink_core/`) with dual-backend service layer (Dart active by default, Rust ready).
 
 ## Layer Diagram
 
@@ -142,8 +142,25 @@ See [FEC_ARCHITECTURE.md](FEC_ARCHITECTURE.md) and [PHASE7_PERFORMANCE.md](PHASE
 
 Run: `cd photonlink_app && flutter test`
 
-Includes Phase 3–7 tests: QR reliability, compression, encryption, adaptive engine, FEC (13+ tests), Color Matrix encode/decode. **100 automated tests** total.
+Includes Phase 3–8 tests: QR reliability, compression, encryption, adaptive engine, FEC (13+ tests), Color Matrix encode/decode, Rust migration benchmarks. **102 automated tests** total.
+
+## Phase 8 — Rust Core (Dual Backend)
+
+```
+Controllers → services/core/ (CoreService, CompressionService, …)
+                    ├── dart (default) → existing Dart engines
+                    └── rust → PhotonLinkCoreApi → photonlink_core/
+```
+
+| Doc | Content |
+|-----|---------|
+| [RUST_ARCHITECTURE.md](RUST_ARCHITECTURE.md) | Crate layout, modules, compatibility |
+| [FFI_DOCUMENTATION.md](FFI_DOCUMENTATION.md) | FRB bridge, service interfaces |
+| [MIGRATION_REPORT.md](MIGRATION_REPORT.md) | What migrated, test results |
+| [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md) | Dart baselines, Rust comparison |
+| [SECURITY_RUST.md](SECURITY_RUST.md) | Memory safety, key handling |
+| [PHASE9_READINESS.md](PHASE9_READINESS.md) | Next phase gates |
 
 ## Future Transports
 
-`Transport<T>` abstraction supports `opticalStream`, `audio`, `flash` without changing the core pipeline. Adaptive engine and FEC layers are reusable by future transports. See [PHASE8_READINESS.md](PHASE8_READINESS.md).
+`Transport<T>` abstraction supports `opticalStream`, `audio`, `flash` without changing the core pipeline. Adaptive engine and FEC layers are reusable by future transports. See [FUTURE_EXPANSION.md](FUTURE_EXPANSION.md) and [PHASE9_READINESS.md](PHASE9_READINESS.md).

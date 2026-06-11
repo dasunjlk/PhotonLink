@@ -1,0 +1,9 @@
+# Flutter Rust Bridge configuration for PhotonLink Phase 8.
+# Run: flutter_rust_bridge_codegen generate
+
+rust_input: crate::api
+rust_root: ../photonlink_core/
+dart_output: lib/src/rust
+dart_entrypoint_class_name: PhotonLinkCoreApi
+
+web: false

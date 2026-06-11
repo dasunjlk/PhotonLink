@@ -18,7 +18,10 @@ import '../adaptive/adaptive_engine_providers.dart';
 import '../color_matrix/color_matrix_frame.dart';
 import '../color_matrix/color_matrix_frame_codec.dart';
 import '../color_matrix/color_matrix_transport.dart';
-import '../core/integrity_verifier.dart';
+import '../../services/core/core_providers.dart';
+import '../../services/core/core_service.dart';
+import '../../services/core/fec_service.dart';
+import '../../services/core/impl/dart_fec_service.dart';
 import '../core/payload_pipeline.dart';
 import '../core/reconstruction_engine.dart';
 import '../core/transfer_limits.dart';
@@ -33,7 +36,8 @@ import 'transfer_providers.dart';
 /// Color Matrix receiver: camera frames → decode → reconstruct → restore.
 class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
   final _recon = ReconstructionEngine();
-  final _fecRecovery = RecoveryEngine();
+  final _fecEngine = RecoveryEngine();
+  FecService get _fecRecovery => DartFecService(engine: _fecEngine);
   final _fecFactory = const FecConfigurationFactory();
   final _keyProvider = EncryptionKeyProvider();
   final _keyExchange = SessionKeyExchange();
@@ -50,7 +54,7 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
   }
 
   PayloadPipeline get _pipeline => ref.read(payloadPipelineProvider);
-  IntegrityVerifier get _verifier => ref.read(integrityVerifierProvider);
+  CoreService get _core => ref.read(coreServiceProvider);
 
   Future<void> startReceiving({
     int cameraWidth = 0,
@@ -330,11 +334,11 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
       if (wireBytes.length != meta.fileSize) {
         throw StateError('Reconstructed wire size mismatch');
       }
-      if (!_verifier.verify(wireBytes, meta.sha256)) {
+      if (!_core.sha256Verify(wireBytes, meta.sha256)) {
         throw StateError('Wire payload SHA-256 check failed');
       }
 
-      final plaintext = await _pipeline.restorePlaintext(
+      final plaintext = await _pipeline.restore(
         wireBytes: wireBytes,
         meta: MetadataPacketFields(
           compression: meta.compression,
@@ -350,7 +354,7 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
       if (plaintext.length != expectedSize) {
         throw StateError('Plaintext size mismatch after decompress');
       }
-      if (!_verifier.verify(plaintext, expectedHash)) {
+      if (!_core.sha256Verify(plaintext, expectedHash)) {
         throw StateError('Original file SHA-256 check failed');
       }
 
@@ -472,7 +476,7 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
 
   void reset() {
     _recon.reset();
-    _fecRecovery.reset();
+    _fecEngine.reset();
     _keyProvider.clear();
     _diagnostics.reset();
     _finalizing = false;

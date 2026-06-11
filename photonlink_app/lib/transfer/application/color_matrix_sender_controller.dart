@@ -24,6 +24,8 @@ import '../core/session_factory.dart';
 import '../core/transfer_limits.dart';
 import '../fec/fec_configuration_factory.dart';
 import '../fec/recovery_engine.dart';
+import '../../services/core/fec_service.dart';
+import '../../services/core/impl/dart_fec_service.dart';
 import '../diagnostics/diagnostics_collector.dart';
 import '../security/encryption_key_provider.dart';
 import '../security/session_key_exchange.dart';
@@ -39,7 +41,8 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
   final _keyProvider = EncryptionKeyProvider();
   final _keyExchange = SessionKeyExchange();
   late FrameDiagnosticsCollector _diagnostics;
-  final _fecRecovery = RecoveryEngine();
+  final _fecEngine = RecoveryEngine();
+  FecService get _fecRecovery => DartFecService(engine: _fecEngine);
   final _fecFactory = const FecConfigurationFactory();
   DateTime? _transferStartedAt;
 
@@ -68,7 +71,7 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
     _sessionTransport = null;
     _keyProvider.clear();
     _diagnostics.reset();
-    _fecRecovery.reset();
+    _fecEngine.reset();
     _transferStartedAt = null;
 
     state = state.copyWith(
@@ -114,7 +117,7 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
         _keyExchangePayload = keyResult.payloadBase64;
       }
 
-      final prepared = await _pipeline.prepareForSend(
+      final prepared = await _pipeline.prepare(
         fileBytes: bytes,
         compression: compression,
         encryption: encryption,

@@ -7,6 +7,7 @@ import '../../protocols/interfaces/compression_type.dart';
 import '../../protocols/interfaces/encryption_mode.dart';
 import '../../protocols/interfaces/transfer_packet.dart';
 import '../../protocols/interfaces/transfer_session.dart';
+import '../../services/core/core_service.dart';
 import '../qr/qr_frame_codec.dart';
 import '../qr/qr_transfer_limits.dart';
 import 'chunking_engine.dart';
@@ -17,12 +18,12 @@ import 'transfer_limits.dart';
 class SessionFactory {
   SessionFactory({
     ChunkManager? chunkManager,
-    IntegrityVerifier? integrityVerifier,
+    CoreService? coreService,
   })  : _chunkManager = chunkManager ?? const ChunkingEngine(),
-        _integrityVerifier = integrityVerifier ?? const IntegrityVerifier();
+        _coreService = coreService;
 
   final ChunkManager _chunkManager;
-  final IntegrityVerifier _integrityVerifier;
+  final CoreService? _coreService;
   final _random = Random();
 
   String generateSessionId() {
@@ -38,7 +39,8 @@ class SessionFactory {
     required String mimeType,
     int? chunkSize,
   }) {
-    final sha256 = _integrityVerifier.compute(fileBytes);
+    final sha256 = _coreService?.sha256Hex(fileBytes) ??
+        const IntegrityVerifier().compute(fileBytes);
     return prepareSenderSession(
       wireBytes: fileBytes,
       fileName: fileName,
