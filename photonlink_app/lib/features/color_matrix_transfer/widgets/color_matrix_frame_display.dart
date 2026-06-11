@@ -23,7 +23,7 @@ class ColorMatrixFrameDisplay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (size != null) {
-      return _buildContent(size!);
+      return _buildContent(context, size!);
     }
 
     return LayoutBuilder(
@@ -35,23 +35,29 @@ class ColorMatrixFrameDisplay extends StatelessWidget {
         if (edge <= 0) {
           return const Center(child: CircularProgressIndicator());
         }
-        return Center(child: _buildContent(edge));
+        return Center(child: _buildContent(context, edge));
       },
     );
   }
 
-  Widget _buildContent(double edge) {
+  Widget _buildContent(BuildContext context, double edge) {
+    final scheme = Theme.of(context).colorScheme;
+
     if (rasterBytes == null || rasterBytes!.isEmpty) {
       return Container(
         width: edge,
         height: edge,
         decoration: BoxDecoration(
-          color: Colors.grey.shade900,
+          color: scheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white24),
+          border: Border.all(color: scheme.outline),
         ),
-        child: const Center(
-          child: Icon(Icons.grid_view_rounded, size: 64, color: Colors.white38),
+        child: Center(
+          child: Icon(
+            Icons.grid_view_rounded,
+            size: 64,
+            color: scheme.onSurfaceVariant,
+          ),
         ),
       );
     }

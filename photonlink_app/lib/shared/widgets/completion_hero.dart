@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
-import '../../ui/colors.dart';
 import '../../ui/motion.dart';
 import '../../ui/spacing.dart';
 
@@ -21,7 +20,9 @@ class CompletionHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final color = success ? AppColors.success : theme.colorScheme.error;
+    final scheme = theme.colorScheme;
+    final color =
+        success ? scheme.onSurface : scheme.onSurfaceVariant;
 
     return Column(
       children: [
@@ -29,9 +30,9 @@ class CompletionHero extends StatelessWidget {
           width: 96,
           height: 96,
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.14),
+            color: scheme.onSurface.withValues(alpha: 0.08),
             shape: BoxShape.circle,
-            border: Border.all(color: color.withValues(alpha: 0.4), width: 2),
+            border: Border.all(color: scheme.outline, width: 2),
           ),
           child: Icon(
             success ? Icons.check_rounded : Icons.close_rounded,
@@ -53,7 +54,7 @@ class CompletionHero extends StatelessWidget {
           Text(
             subtitle!,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+              color: scheme.onSurfaceVariant,
             ),
             textAlign: TextAlign.center,
           ),

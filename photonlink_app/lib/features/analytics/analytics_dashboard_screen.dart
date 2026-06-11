@@ -97,11 +97,11 @@ class AnalyticsDashboardScreen extends ConsumerWidget {
                         if (adaptive.mismatchWarning != null) ...[
                           const SizedBox(height: AppSpacing.md),
                           PhotonCard(
-                            accentColor: theme.colorScheme.error,
+                            accentColor: theme.colorScheme.onSurfaceVariant,
                             child: Row(
                               children: [
                                 Icon(Icons.warning_amber_rounded,
-                                    color: theme.colorScheme.error,),
+                                    color: theme.colorScheme.onSurfaceVariant,),
                                 const SizedBox(width: AppSpacing.sm),
                                 Expanded(
                                     child: Text(adaptive.mismatchWarning!),),

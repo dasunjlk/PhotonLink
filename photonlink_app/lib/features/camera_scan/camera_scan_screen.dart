@@ -191,7 +191,7 @@ class _ErrorView extends StatelessWidget {
               Icon(
                 Icons.no_photography_rounded,
                 size: 64,
-                color: Theme.of(context).colorScheme.error,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
               const SizedBox(height: AppSpacing.md),
               Text(

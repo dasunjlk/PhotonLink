@@ -228,7 +228,7 @@ class _ColorMatrixSenderScreenState
                 const SizedBox(height: AppSpacing.md),
                 Text(
                   _pickError ?? state.errorMessage!,
-                  style: TextStyle(color: theme.colorScheme.error),
+                  style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
                   textAlign: TextAlign.center,
                 ),
               ],

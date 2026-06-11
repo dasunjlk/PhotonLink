@@ -55,7 +55,7 @@ class ScanFrameOverlay extends StatelessWidget {
           height: frameSize,
           child: CustomPaint(
             painter: _CornerBracketPainter(
-              color: AppColors.accent,
+              color: AppColors.white,
             ),
           ),
         ),
@@ -71,14 +71,14 @@ class ScanFrameOverlay extends StatelessWidget {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    AppColors.accent.withValues(alpha: 0),
-                    AppColors.accent,
-                    AppColors.accent.withValues(alpha: 0),
+                    AppColors.white.withValues(alpha: 0),
+                    AppColors.white,
+                    AppColors.white.withValues(alpha: 0),
                   ],
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.accent.withValues(alpha: 0.6),
+                    color: AppColors.white.withValues(alpha: 0.35),
                     blurRadius: 8,
                   ),
                 ],

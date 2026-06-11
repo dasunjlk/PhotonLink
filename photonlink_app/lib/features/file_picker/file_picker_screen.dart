@@ -165,7 +165,8 @@ class _FilePickerScreenState extends State<FilePickerScreen> {
                           const SizedBox(height: AppSpacing.md),
                           Text(
                             _errorMessage!,
-                            style: TextStyle(color: theme.colorScheme.error),
+                            style:
+                                TextStyle(color: theme.colorScheme.onSurfaceVariant),
                             textAlign: TextAlign.center,
                           ),
                         ],

@@ -27,7 +27,7 @@ class PhotonSectionHeader extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           if (icon != null) ...[
-            Icon(icon, color: theme.colorScheme.primary, size: 22),
+            Icon(icon, color: theme.colorScheme.onSurface, size: 22),
             const SizedBox(width: AppSpacing.sm),
           ],
           Expanded(

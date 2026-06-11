@@ -11,8 +11,8 @@ enum PhotonButtonSize { medium, large }
 
 /// The standard PhotonLink action button.
 ///
-/// Modern, rounded, with optional leading [icon], variant-based emphasis,
-/// touch-friendly sizing, and an optional [expand] to fill its width.
+/// Uses theme [ColorScheme] pairs so labels stay readable in dark and light
+/// modes. The optional [accentColor] is ignored — contrast is theme-driven.
 class PhotonButton extends StatelessWidget {
   const PhotonButton({
     required this.label,
@@ -31,6 +31,8 @@ class PhotonButton extends StatelessWidget {
   final IconData? icon;
   final PhotonButtonVariant variant;
   final PhotonButtonSize size;
+
+  /// Kept for API compatibility; styling uses [ThemeData.colorScheme] only.
   final Color? accentColor;
   final bool expand;
   final bool loading;
@@ -38,10 +40,30 @@ class PhotonButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accent = accentColor ??
-        (variant == PhotonButtonVariant.danger
-            ? theme.colorScheme.error
-            : theme.colorScheme.primary);
+    final scheme = theme.colorScheme;
+
+    final (Color bg, Color fg, Color? border) = switch (variant) {
+      PhotonButtonVariant.primary => (
+          scheme.primary,
+          scheme.onPrimary,
+          null,
+        ),
+      PhotonButtonVariant.danger => (
+          scheme.surfaceContainerHighest,
+          scheme.onSurface,
+          scheme.outline,
+        ),
+      PhotonButtonVariant.secondary => (
+          Colors.transparent,
+          scheme.onSurface,
+          scheme.outline,
+        ),
+      PhotonButtonVariant.ghost => (
+          Colors.transparent,
+          scheme.onSurfaceVariant,
+          null,
+        ),
+    };
 
     final padding = EdgeInsets.symmetric(
       horizontal:
@@ -52,26 +74,27 @@ class PhotonButton extends StatelessWidget {
     final shape = RoundedRectangleBorder(borderRadius: AppRadii.mdRadius);
     final enabled = onPressed != null && !loading;
 
-    final child = _content(context);
+    final child = _content(fg);
 
     final Widget button = switch (variant) {
       PhotonButtonVariant.primary || PhotonButtonVariant.danger => FilledButton(
           onPressed: enabled ? onPressed : null,
           style: FilledButton.styleFrom(
-            backgroundColor: accent,
-            foregroundColor: Colors.white,
-            disabledBackgroundColor: accent.withValues(alpha: 0.30),
-            disabledForegroundColor: Colors.white70,
+            backgroundColor: bg,
+            foregroundColor: fg,
+            disabledBackgroundColor: bg.withValues(alpha: 0.35),
+            disabledForegroundColor: fg.withValues(alpha: 0.45),
             padding: padding,
             shape: shape,
+            side: border != null ? BorderSide(color: border) : null,
           ),
           child: child,
         ),
       PhotonButtonVariant.secondary => OutlinedButton(
           onPressed: enabled ? onPressed : null,
           style: OutlinedButton.styleFrom(
-            foregroundColor: accent,
-            side: BorderSide(color: accent.withValues(alpha: 0.5)),
+            foregroundColor: fg,
+            side: BorderSide(color: border ?? scheme.outline),
             padding: padding,
             shape: shape,
           ),
@@ -80,7 +103,7 @@ class PhotonButton extends StatelessWidget {
       PhotonButtonVariant.ghost => TextButton(
           onPressed: enabled ? onPressed : null,
           style: TextButton.styleFrom(
-            foregroundColor: accent,
+            foregroundColor: fg,
             padding: padding,
             shape: shape,
           ),
@@ -91,12 +114,15 @@ class PhotonButton extends StatelessWidget {
     return expand ? SizedBox(width: double.infinity, child: button) : button;
   }
 
-  Widget _content(BuildContext context) {
+  Widget _content(Color foreground) {
     if (loading) {
-      return const SizedBox(
+      return SizedBox(
         height: 18,
         width: 18,
-        child: CircularProgressIndicator(strokeWidth: 2),
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: foreground,
+        ),
       );
     }
     if (icon == null) return Text(label);

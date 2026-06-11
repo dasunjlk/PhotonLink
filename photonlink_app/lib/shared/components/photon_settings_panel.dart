@@ -75,12 +75,12 @@ class _Tile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = selected
-        ? theme.colorScheme.primary
+        ? theme.colorScheme.onSurface
         : theme.colorScheme.onSurfaceVariant;
 
     return Material(
       color: selected
-          ? theme.colorScheme.primary.withValues(alpha: 0.14)
+          ? theme.colorScheme.onSurface.withValues(alpha: 0.10)
           : Colors.transparent,
       borderRadius: AppRadii.mdRadius,
       clipBehavior: Clip.antiAlias,
@@ -123,14 +123,17 @@ class _Chip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final color = selected
-        ? theme.colorScheme.primary
+        ? theme.colorScheme.onSurface
         : theme.colorScheme.onSurfaceVariant;
 
     return Material(
       color: selected
-          ? theme.colorScheme.primary.withValues(alpha: 0.14)
-          : AppColors.darkSurfaceElevated,
+          ? theme.colorScheme.onSurface.withValues(alpha: 0.10)
+          : (isDark
+              ? AppColors.darkSurfaceElevated
+              : AppColors.lightSurfaceElevated),
       borderRadius: AppRadii.pillRadius,
       clipBehavior: Clip.antiAlias,
       child: InkWell(

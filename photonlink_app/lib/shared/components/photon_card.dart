@@ -9,7 +9,7 @@ import '../../ui/spacing.dart';
 ///
 /// A rounded, dark-gray card with a subtle border. When [onTap] is provided
 /// it gains pointer hover elevation and a gentle press-scale for tactile
-/// feedback. An [accentColor] adds a faint brand-tinted gradient + border.
+/// feedback.
 class PhotonCard extends StatefulWidget {
   const PhotonCard({
     required this.child,
@@ -45,7 +45,6 @@ class _PhotonCardState extends State<PhotonCard> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final radius = widget.borderRadius ?? AppRadii.lgRadius;
-    final accent = widget.accentColor;
     final interactive = widget.onTap != null;
 
     final baseColor = isDark ? AppColors.darkSurface : AppColors.lightSurface;
@@ -53,10 +52,8 @@ class _PhotonCardState extends State<PhotonCard> {
         isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated;
 
     final borderColor = widget.selected
-        ? (accent ?? theme.colorScheme.primary)
-        : accent != null
-            ? accent.withValues(alpha: _hovered ? 0.55 : 0.32)
-            : (isDark ? AppColors.darkBorder : AppColors.lightBorder);
+        ? theme.colorScheme.onSurface
+        : (isDark ? AppColors.darkBorder : AppColors.lightBorder);
 
     final card = AnimatedScale(
       scale: _pressed ? 0.985 : 1.0,
@@ -72,20 +69,10 @@ class _PhotonCardState extends State<PhotonCard> {
             color: borderColor,
             width: widget.selected ? 1.5 : 1,
           ),
-          gradient: accent != null
-              ? LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    accent.withValues(alpha: 0.10),
-                    accent.withValues(alpha: 0.02),
-                  ],
-                )
-              : null,
           boxShadow: _hovered && interactive
               ? [
                   BoxShadow(
-                    color: (accent ?? Colors.black)
+                    color: Colors.black
                         .withValues(alpha: isDark ? 0.35 : 0.12),
                     blurRadius: 24,
                     offset: const Offset(0, 10),

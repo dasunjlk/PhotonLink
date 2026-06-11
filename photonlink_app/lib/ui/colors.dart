@@ -1,62 +1,75 @@
 import 'package:flutter/material.dart';
 
-/// Central color palette and gradient definitions for PhotonLink.
+/// Monochrome palette for PhotonLink — black, white, gray, and ash only.
 ///
-/// The dark theme is the product default: a near-black canvas with
-/// dark-gray cards, high-contrast text, and PhotonLink brand accents.
+/// Dark theme is the product default: near-black canvas, ash-gray cards,
+/// high-contrast white text, and no chromatic accent colors.
 abstract final class AppColors {
-  // Brand seed colors
-  static const Color primary = Color(0xFF6366F1);
-  static const Color secondary = Color(0xFF8B5CF6);
-  static const Color accent = Color(0xFF06B6D4);
-  static const Color success = Color(0xFF10B981);
-  static const Color warning = Color(0xFFF59E0B);
-  static const Color error = Color(0xFFEF4444);
-  static const Color info = Color(0xFF3B82F6);
+  // Core neutrals
+  static const Color black = Color(0xFF000000);
+  static const Color white = Color(0xFFFFFFFF);
 
-  // Light mode surfaces
-  static const Color lightBackground = Color(0xFFF8FAFC);
-  static const Color lightSurface = Color(0xFFFFFFFF);
-  static const Color lightSurfaceElevated = Color(0xFFF1F5F9);
-  static const Color lightBorder = Color(0xFFE2E8F0);
+  // Dark surfaces
+  static const Color darkBackground = Color(0xFF0A0A0A);
+  static const Color darkSurface = Color(0xFF141414);
+  static const Color darkSurfaceElevated = Color(0xFF1C1C1C);
+  static const Color darkSurfaceHighest = Color(0xFF242424);
+  static const Color darkBorder = Color(0xFF2E2E2E);
+  static const Color darkGlass = Color(0xCC141414);
+  static const Color darkGlassBorder = Color(0x1FFFFFFF);
+
+  // Ash / gray scale
+  static const Color ashDark = Color(0xFF3A3A3A);
+  static const Color ash = Color(0xFF6B6B6B);
+  static const Color ashLight = Color(0xFF9A9A9A);
+  static const Color gray = Color(0xFFB3B3B3);
+  static const Color grayLight = Color(0xFFD4D4D4);
+
+  // Text on dark
+  static const Color darkTextPrimary = Color(0xFFF0F0F0);
+  static const Color darkTextSecondary = Color(0xFFA3A3A3);
+  static const Color darkTextTertiary = Color(0xFF6E6E6E);
+
+  // Theme roles — all mapped to neutrals (no hue)
+  static const Color primary = white;
+  static const Color onPrimary = black;
+  static const Color secondary = ashLight;
+  static const Color accent = grayLight;
+  static const Color success = Color(0xFFF5F5F5);
+  static const Color warning = ashLight;
+  static const Color error = grayLight;
+  static const Color info = ash;
+
+  // Light mode surfaces (grayscale only)
+  static const Color lightBackground = Color(0xFFF5F5F5);
+  static const Color lightSurface = white;
+  static const Color lightSurfaceElevated = Color(0xFFE8E8E8);
+  static const Color lightBorder = Color(0xFFD4D4D4);
   static const Color lightGlass = Color(0xCCFFFFFF);
   static const Color lightGlassBorder = Color(0x22000000);
 
-  // Dark mode surfaces — near-black canvas, dark-gray cards.
-  static const Color darkBackground = Color(0xFF0A0A0C);
-  static const Color darkSurface = Color(0xFF161619);
-  static const Color darkSurfaceElevated = Color(0xFF1E1E23);
-  static const Color darkSurfaceHighest = Color(0xFF26262C);
-  static const Color darkBorder = Color(0xFF2C2C33);
-  static const Color darkGlass = Color(0xCC161619);
-  static const Color darkGlassBorder = Color(0x1FFFFFFF);
-
-  // High-contrast text on dark
-  static const Color darkTextPrimary = Color(0xFFF4F4F5);
-  static const Color darkTextSecondary = Color(0xFFA1A1AA);
-  static const Color darkTextTertiary = Color(0xFF71717A);
-
-  // Gradient stops for backgrounds
+  // Background gradients — subtle black/ash shifts only
   static const List<Color> lightGradient = [
-    Color(0xFFF8FAFC),
-    Color(0xFFEEF2FF),
-    Color(0xFFF0F9FF),
+    Color(0xFFF5F5F5),
+    Color(0xFFE8E8E8),
+    Color(0xFFEDEDED),
   ];
 
-  // Subtle near-black gradient with a faint indigo/cyan wash.
   static const List<Color> darkGradient = [
-    Color(0xFF0A0A0C),
-    Color(0xFF0D0D14),
-    Color(0xFF0A0E16),
+    Color(0xFF0A0A0A),
+    Color(0xFF111111),
+    Color(0xFF0D0D0D),
   ];
 
-  // Brand accent gradient for highlights and primary actions.
-  static const List<Color> brandGradient = [primary, secondary];
+  static const List<Color> brandGradient = [
+    ashDark,
+    darkSurfaceElevated,
+  ];
 
-  // Transfer method accent colors
-  static const Color qrAccent = Color(0xFF6366F1);
-  static const Color colorMatrixAccent = Color(0xFF8B5CF6);
-  static const Color opticalStreamAccent = Color(0xFF06B6D4);
-  static const Color audioAccent = Color(0xFF10B981);
-  static const Color flashAccent = Color(0xFFF59E0B);
+  // Transfer method accents — ash tiers (still monochrome)
+  static const Color qrAccent = Color(0xFFE8E8E8);
+  static const Color colorMatrixAccent = Color(0xFFC4C4C4);
+  static const Color opticalStreamAccent = ashLight;
+  static const Color audioAccent = ash;
+  static const Color flashAccent = ashDark;
 }
