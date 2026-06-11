@@ -8,7 +8,7 @@ import '../../protocols/interfaces/compression_type.dart';
 /// Immutable application settings model.
 class AppSettings {
   const AppSettings({
-    this.themeMode = ThemeMode.system,
+    this.themeMode = ThemeMode.dark,
     this.language = 'en',
     this.compressionEnabled = false,
     this.compressionMode = CompressionType.none,

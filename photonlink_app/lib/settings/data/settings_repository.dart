@@ -45,7 +45,7 @@ class SettingsRepository {
     return AppSettings(
       themeMode: themeIndex != null
           ? ThemeMode.values[themeIndex.clamp(0, ThemeMode.values.length - 1)]
-          : ThemeMode.system,
+          : ThemeMode.dark,
       language: language ?? 'en',
       compressionEnabled: compression ?? false,
       compressionMode: CompressionType.fromId(compressionModeId),

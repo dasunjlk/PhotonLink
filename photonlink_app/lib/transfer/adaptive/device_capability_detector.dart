@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:io' show Platform;
 
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
@@ -12,6 +12,8 @@ class DeviceCapabilityDetector {
 
   final DeviceInfoPlugin _deviceInfo;
 
+  static const int _webCpuCoreEstimate = 4;
+
   Future<CapabilityProfile> detect({
     int cameraWidth = 0,
     int cameraHeight = 0,
@@ -24,7 +26,7 @@ class DeviceCapabilityDetector {
     final displayHeight = display?.size.height ?? 0;
     final refreshRate = display?.refreshRate ?? 60;
 
-    var cpuCores = Platform.numberOfProcessors;
+    var cpuCores = _webCpuCoreEstimate;
     var cpuModel = 'unknown';
     var totalMemoryMb = 0;
     var platform = 'unknown';
@@ -34,30 +36,33 @@ class DeviceCapabilityDetector {
         platform = 'web';
         final info = await _deviceInfo.webBrowserInfo;
         cpuModel = info.browserName.name;
-      } else if (Platform.isAndroid) {
-        platform = 'android';
-        final info = await _deviceInfo.androidInfo;
-        cpuModel = info.model;
-        totalMemoryMb = 0; // Not exposed on all Android API levels
-      } else if (Platform.isIOS) {
-        platform = 'ios';
-        final info = await _deviceInfo.iosInfo;
-        cpuModel = info.utsname.machine;
-        totalMemoryMb = info.physicalRamSize;
-      } else if (Platform.isWindows) {
-        platform = 'windows';
-        final info = await _deviceInfo.windowsInfo;
-        cpuModel = info.computerName;
-        totalMemoryMb = info.systemMemoryInMegabytes;
-      } else if (Platform.isMacOS) {
-        platform = 'macos';
-        final info = await _deviceInfo.macOsInfo;
-        cpuModel = info.model;
-        totalMemoryMb = 0;
-      } else if (Platform.isLinux) {
-        platform = 'linux';
-        final info = await _deviceInfo.linuxInfo;
-        cpuModel = info.prettyName;
+      } else {
+        cpuCores = Platform.numberOfProcessors;
+        if (Platform.isAndroid) {
+          platform = 'android';
+          final info = await _deviceInfo.androidInfo;
+          cpuModel = info.model;
+          totalMemoryMb = 0;
+        } else if (Platform.isIOS) {
+          platform = 'ios';
+          final info = await _deviceInfo.iosInfo;
+          cpuModel = info.utsname.machine;
+          totalMemoryMb = info.physicalRamSize;
+        } else if (Platform.isWindows) {
+          platform = 'windows';
+          final info = await _deviceInfo.windowsInfo;
+          cpuModel = info.computerName;
+          totalMemoryMb = info.systemMemoryInMegabytes;
+        } else if (Platform.isMacOS) {
+          platform = 'macos';
+          final info = await _deviceInfo.macOsInfo;
+          cpuModel = info.model;
+          totalMemoryMb = 0;
+        } else if (Platform.isLinux) {
+          platform = 'linux';
+          final info = await _deviceInfo.linuxInfo;
+          cpuModel = info.prettyName;
+        }
       }
     } catch (_) {
       // Graceful degradation.
@@ -73,11 +78,13 @@ class DeviceCapabilityDetector {
       cameraFpsEstimate = cameraResolutionPreset == 'high' ? 30 : 24;
     }
 
-    final deviceClass = _classifyDevice(
-      cpuCores: cpuCores,
-      memoryMb: totalMemoryMb,
-      displayRefresh: refreshRate,
-    );
+    final deviceClass = kIsWeb
+        ? DeviceClass.mid
+        : _classifyDevice(
+            cpuCores: cpuCores,
+            memoryMb: totalMemoryMb,
+            displayRefresh: refreshRate,
+          );
 
     return CapabilityProfile(
       cameraWidth: cameraWidth,

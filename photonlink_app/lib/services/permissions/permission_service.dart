@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/errors/app_exceptions.dart';
@@ -24,6 +25,9 @@ class PermissionService {
 
   /// Ensures camera permission is granted, throws if denied.
   Future<void> ensureCamera() async {
+    // Web browsers prompt via getUserMedia when the camera plugin initializes.
+    if (kIsWeb) return;
+
     final granted = await requestCamera();
     if (!granted) {
       throw const PermissionDeniedException(

@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import '../../core/errors/app_exceptions.dart';
 import '../../protocols/transfer_method.dart';
 import '../../services/permissions/permission_service.dart';
+import '../../shared/components/components.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
+import '../../shared/widgets/inner_screen_header.dart';
 import '../../shared/widgets/scan_frame_overlay.dart';
 import '../../ui/spacing.dart';
 
@@ -39,7 +41,8 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
       await _permissionService.ensureCamera();
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
-        throw const CameraUnavailableException('No cameras found on this device.');
+        throw const CameraUnavailableException(
+            'No cameras found on this device.',);
       }
 
       final camera = cameras.firstWhere(
@@ -86,11 +89,24 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
   @override
   Widget build(BuildContext context) {
     return GradientScaffold(
-      appBar: photonAppBar(
-        context,
-        title: 'Scan — ${widget.method.displayName}',
+      body: SafeArea(
+        child: _isInitializing || _errorMessage != null
+            ? Column(
+                children: [
+                  InnerScreenHeader(
+                      title: 'Scan · ${widget.method.displayName}',),
+                  Expanded(child: _buildBody()),
+                ],
+              )
+            : Stack(
+                fit: StackFit.expand,
+                children: [
+                  _buildBody(),
+                  InnerScreenHeader(
+                      title: 'Scan · ${widget.method.displayName}',),
+                ],
+              ),
       ),
-      body: _buildBody(),
     );
   }
 
@@ -167,32 +183,36 @@ class _ErrorView extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.no_photography_rounded,
-              size: 64,
-              color: Theme.of(context).colorScheme.error,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Retry'),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            TextButton(
-              onPressed: onOpenSettings,
-              child: const Text('Open Settings'),
-            ),
-          ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.no_photography_rounded,
+                size: 64,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              PhotonButton(
+                label: 'Retry',
+                icon: Icons.refresh_rounded,
+                onPressed: onRetry,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              PhotonButton(
+                label: 'Open Settings',
+                variant: PhotonButtonVariant.ghost,
+                onPressed: onOpenSettings,
+              ),
+            ],
+          ),
         ),
       ),
     );

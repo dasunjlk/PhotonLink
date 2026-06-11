@@ -83,9 +83,7 @@ class ScanFrameOverlay extends StatelessWidget {
                   ),
                 ],
               ),
-            )
-                .animate(onPlay: (c) => c.repeat(reverse: true))
-                .moveY(
+            ).animate(onPlay: (c) => c.repeat(reverse: true)).moveY(
                   begin: 0,
                   end: frameSize - 16,
                   duration: AppMotion.slow * 4,
