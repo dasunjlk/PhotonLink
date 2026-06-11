@@ -98,11 +98,6 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
       await adaptive.initializeSession();
       final mapped = adaptive.getSessionStartParams();
 
-      _sessionTransport = ColorMatrixTransport(
-        gridSize: mapped.gridSize,
-        bitsPerChannel: mapped.bitsPerChannel,
-      );
-
       final compression = settings.effectiveCompression;
       final encryption = settings.encryptionEnabled
           ? EncryptionMode.enabled
@@ -121,13 +116,46 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
         keyProvider: _keyProvider,
       );
 
-      final codec = _sessionTransport!.encoder as ColorMatrixFrameCodec;
       final sessionId = _sessionFactory.generateSessionId();
+      final preferredGrid = settings.adaptiveModeEnabled
+          ? mapped.gridSize
+          : settings.colorMatrixSize;
+      final bitsPerChannel = settings.adaptiveModeEnabled
+          ? mapped.bitsPerChannel
+          : settings.colorBitsPerChannel;
+
+      final viableGrid = ColorMatrixTransferLimits.resolveViableGrid(
+        sessionId: sessionId,
+        fileName: fileName,
+        fileSize: prepared.wireBytes.length,
+        bitsPerChannel: bitsPerChannel,
+        compression: prepared.compression,
+        encryption: prepared.encryption,
+        originalSize: prepared.originalSize,
+        originalSha256: prepared.originalSha256,
+        keyExchangePayload: _keyExchangePayload,
+        preferredGrid: preferredGrid,
+      );
+
+      final gridSize = viableGrid > preferredGrid ? viableGrid : preferredGrid;
+
+      _sessionTransport = ColorMatrixTransport(
+        gridSize: gridSize,
+        bitsPerChannel: bitsPerChannel,
+      );
+
+      final codec = _sessionTransport!.encoder as ColorMatrixFrameCodec;
       final chunkSize = ColorMatrixTransferLimits.resolveChunkSize(
         sessionId: sessionId,
         fileBytes: prepared.wireBytes,
         chunkManager: ref.read(chunkingEngineProvider),
         encoder: codec,
+        fileName: fileName,
+        compression: prepared.compression,
+        encryption: prepared.encryption,
+        originalSize: prepared.originalSize,
+        originalSha256: prepared.originalSha256,
+        keyExchangePayload: _keyExchangePayload,
       );
 
       _bundle = _sessionFactory.prepareSenderSession(
@@ -165,8 +193,8 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
         compression: compression,
         encryption: encryption,
         diagnostics: _diagnostics.current,
-        gridSize: mapped.gridSize,
-        bitsPerChannel: mapped.bitsPerChannel,
+        gridSize: gridSize,
+        bitsPerChannel: bitsPerChannel,
         transportProfile: mapped.profile,
         qualityScore: adaptive.state.qualityScore,
       );

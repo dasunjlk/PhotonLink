@@ -72,19 +72,3 @@ class _GradientScaffoldState extends State<GradientScaffold>
     );
   }
 }
-
-/// Standard app bar for inner screens.
-PreferredSizeWidget photonAppBar(
-  BuildContext context, {
-  required String title,
-  List<Widget>? actions,
-}) {
-  return AppBar(
-    title: Text(title),
-    actions: actions,
-    leading: IconButton(
-      icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-      onPressed: () => Navigator.of(context).maybePop(),
-    ),
-  );
-}

@@ -2,23 +2,49 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../../shared/widgets/optical_viewport.dart';
+import '../../../ui/spacing.dart';
+
 /// Displays a color matrix frame raster as an image.
+///
+/// When [size] is null the matrix expands to fill the parent [OpticalViewport].
 class ColorMatrixFrameDisplay extends StatelessWidget {
   const ColorMatrixFrameDisplay({
     this.rasterBytes,
-    this.size = 280,
+    this.size,
     super.key,
   });
 
   final Uint8List? rasterBytes;
-  final double size;
+
+  /// Fixed edge length. When null, expands to the largest square that fits.
+  final double? size;
 
   @override
   Widget build(BuildContext context) {
+    if (size != null) {
+      return _buildContent(size!);
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final edge = opticalSquareSize(
+          constraints,
+          padding: AppSpacing.sm,
+        );
+        if (edge <= 0) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        return Center(child: _buildContent(edge));
+      },
+    );
+  }
+
+  Widget _buildContent(double edge) {
     if (rasterBytes == null || rasterBytes!.isEmpty) {
       return Container(
-        width: size,
-        height: size,
+        width: edge,
+        height: edge,
         decoration: BoxDecoration(
           color: Colors.grey.shade900,
           borderRadius: BorderRadius.circular(12),
@@ -32,8 +58,8 @@ class ColorMatrixFrameDisplay extends StatelessWidget {
 
     return RepaintBoundary(
       child: Container(
-        width: size,
-        height: size,
+        width: edge,
+        height: edge,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
@@ -49,6 +75,8 @@ class ColorMatrixFrameDisplay extends StatelessWidget {
           child: Image.memory(
             rasterBytes!,
             key: ValueKey(rasterBytes!.hashCode),
+            width: edge,
+            height: edge,
             fit: BoxFit.contain,
             gaplessPlayback: true,
           ),

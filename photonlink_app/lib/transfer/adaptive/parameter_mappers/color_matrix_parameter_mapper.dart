@@ -60,9 +60,10 @@ class ColorMatrixParameterMapper {
       resolution = ResolutionTier.large;
       rate = RateTier.fast;
     } else if (capability.deviceClass == DeviceClass.low) {
-      resolution = ResolutionTier.small;
+      // 16×16 cannot fit typical metadata frames (long file names).
+      resolution = ResolutionTier.medium;
       rate = RateTier.slow;
-      density = PayloadDensity.low;
+      density = PayloadDensity.medium;
     }
 
     if (lastQualityScore != null) {
@@ -88,7 +89,8 @@ class ColorMatrixParameterMapper {
 
   int _gridSize(ResolutionTier tier) {
     final idx = tier.level.clamp(0, gridSizes.length - 1);
-    return gridSizes[idx];
+    // Minimum 24×24 — smaller grids cannot encode realistic metadata payloads.
+    return gridSizes[idx] < 24 ? 24 : gridSizes[idx];
   }
 
   ResolutionTier _tierFromGrid(int size) {

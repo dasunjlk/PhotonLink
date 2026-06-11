@@ -52,6 +52,13 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
   PayloadPipeline get _pipeline => ref.read(payloadPipelineProvider);
   IntegrityVerifier get _verifier => ref.read(integrityVerifierProvider);
 
+  ColorMatrixTransport get _activeTransport =>
+      _sessionTransport ??
+      ref.read<ColorMatrixTransport>(colorMatrixTransportProvider);
+
+  ColorMatrixFrameCodec get _frameCodec =>
+      _activeTransport.decoder as ColorMatrixFrameCodec;
+
   Future<void> startReceiving({
     int cameraWidth = 0,
     int cameraHeight = 0,
@@ -122,9 +129,7 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
     _diagnostics.recordDetectionAccuracy(detectionAccuracy);
     final stopwatch = Stopwatch()..start();
 
-    final ColorMatrixTransport transport = _sessionTransport ??
-        ref.read(colorMatrixTransportProvider);
-    final packet = transport.decoder.decodeFrame(raw);
+    final packet = _frameCodec.decodeFrame(raw);
     stopwatch.stop();
     _diagnostics.recordDecodeTime(stopwatch.elapsed);
 
@@ -164,9 +169,7 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
   Future<void> _handleMetadata(
     MetadataPacket metadata, {
     required double detectionAccuracy,
-  }) async {
-    final ColorMatrixTransport transport = _sessionTransport ??
-        ref.read(colorMatrixTransportProvider);
+  }  ) async {
     try {
       TransferLimits.validateMetadata(
         fileName: metadata.fileName,
@@ -182,8 +185,7 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
     }
 
     if (metadata.encryption == EncryptionMode.enabled && !_keyProvider.hasKey) {
-      final keyPayload =
-          (transport.decoder as ColorMatrixFrameCodec).lastDecodedKeyExchange;
+      final keyPayload = _frameCodec.lastDecodedKeyExchange;
       if (keyPayload == null) {
         _syncDiagnostics(detectionAccuracy: detectionAccuracy);
         return;
