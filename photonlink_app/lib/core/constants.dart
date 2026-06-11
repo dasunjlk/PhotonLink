@@ -3,10 +3,10 @@ abstract final class AppConstants {
   static const String appName = 'PhotonLink';
   static const String appTagline = 'Offline optical file transfer';
   static const String appVersion = '1.0.0';
-  static const String phaseLabel = 'Phase 6 — Adaptive Optical Engine';
+  static const String phaseLabel = 'Phase 7 — Advanced Error Correction';
 
-  /// PL2 metadata protocol version (1 = Phase 3, 2 = Phase 4).
-  static const int protocolVersion = 2;
+  /// PL2 metadata protocol version (1 = Phase 3, 2 = Phase 4, 3 = Phase 7 FEC).
+  static const int protocolVersion = 3;
 
   // SharedPreferences keys
   static const String prefThemeMode = 'theme_mode';
@@ -29,4 +29,8 @@ abstract final class AppConstants {
   static const String prefQualityMonitoring = 'quality_monitoring_enabled';
   static const String prefColorBitsPerChannel = 'color_bits_per_channel';
   static const String prefLastQualityScore = 'last_quality_score';
+  static const String prefFecEnabled = 'fec_enabled';
+  static const String prefFecProfile = 'fec_profile';
+  static const String prefRedundancyPercent = 'redundancy_percent';
+  static const String prefAdaptiveFecEnabled = 'adaptive_fec_enabled';
 }

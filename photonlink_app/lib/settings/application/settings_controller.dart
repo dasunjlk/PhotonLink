@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../protocols/interfaces/compression_type.dart';
 import '../../services/storage/preferences_service.dart';
 import '../../transfer/adaptive/models/transport_profile.dart';
+import '../../transfer/fec/models/fec_profile.dart';
 import '../../transfer/scheduler/transfer_mode.dart';
 import '../data/settings_repository.dart';
 import '../domain/app_settings.dart';
@@ -110,6 +111,26 @@ class SettingsController extends StateNotifier<AppSettings> {
 
   Future<void> toggleExperimentalFeatures(bool enabled) async {
     state = state.copyWith(experimentalFeatures: enabled);
+    await _repository.save(state);
+  }
+
+  Future<void> toggleFecEnabled(bool enabled) async {
+    state = state.copyWith(fecEnabled: enabled);
+    await _repository.save(state);
+  }
+
+  Future<void> updateFecProfile(FecProfile profile) async {
+    state = state.copyWith(fecProfile: profile);
+    await _repository.save(state);
+  }
+
+  Future<void> updateRedundancyPercent(int percent) async {
+    state = state.copyWith(redundancyPercent: percent.clamp(5, 50));
+    await _repository.save(state);
+  }
+
+  Future<void> toggleAdaptiveFec(bool enabled) async {
+    state = state.copyWith(adaptiveFecEnabled: enabled);
     await _repository.save(state);
   }
 }

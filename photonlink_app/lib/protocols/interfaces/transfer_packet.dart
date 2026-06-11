@@ -74,6 +74,32 @@ final class DataPacket extends TransferPacket {
   final Uint8List payload;
 }
 
+/// Reed-Solomon parity packet for FEC recovery.
+final class ParityPacket extends TransferPacket {
+  const ParityPacket({
+    required super.sessionId,
+    required this.parityId,
+    required this.blockIndex,
+    required this.parityIndexInBlock,
+    required this.dataCount,
+    required this.parityCount,
+    required this.dataSymbolLength,
+    required this.totalParity,
+    required this.totalChunks,
+    required this.payload,
+  });
+
+  final int parityId;
+  final int blockIndex;
+  final int parityIndexInBlock;
+  final int dataCount;
+  final int parityCount;
+  final int dataSymbolLength;
+  final int totalParity;
+  final int totalChunks;
+  final Uint8List payload;
+}
+
 /// Receiver confirms successfully received packet IDs.
 final class AckPacket extends TransferPacket {
   const AckPacket({
@@ -136,6 +162,7 @@ final class ControlPacket extends TransferPacket {
 int packetIdOf(TransferPacket packet) {
   return switch (packet) {
     DataPacket data => data.chunkId,
+    ParityPacket parity => parity.parityId,
     _ => -1,
   };
 }

@@ -270,6 +270,28 @@ void _showDetail(BuildContext context, TransferRecord record) {
             if (record.failureReason != null)
               PhotonInfoTile(
                   label: 'Failure', value: record.failureReason!, dense: true,),
+            if (record.fecProfile != null)
+              PhotonInfoTile(
+                  label: 'FEC profile', value: record.fecProfile!, dense: true,),
+            if (record.packetsRecovered > 0)
+              PhotonInfoTile(
+                label: 'Packets recovered',
+                value: '${record.packetsRecovered}',
+                dense: true,
+              ),
+            if (record.recoveryRate != null)
+              PhotonInfoTile(
+                label: 'Recovery rate',
+                value:
+                    '${(record.recoveryRate! * 100).toStringAsFixed(1)}%',
+                dense: true,
+              ),
+            if (record.parityOverhead != null)
+              PhotonInfoTile(
+                label: 'Parity overhead',
+                value: record.parityOverhead!.toStringAsFixed(2),
+                dense: true,
+              ),
           ],
         ),
       ),

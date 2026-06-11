@@ -2,15 +2,13 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'color_matrix_frame.dart';
-
-/// Serializes and deserializes [ColorMatrixFrame] binary payloads.
 abstract final class ColorMatrixSerializer {
   static Uint8List serialize(ColorMatrixFrame frame) {
     final sessionBytes = utf8.encode(frame.sessionId);
     final buffer = BytesBuilder();
     buffer.add(utf8.encode(ColorMatrixFrame.magic));
     buffer.addByte(frame.protocolVersion);
-    buffer.addByte(frame.isMetadata ? 0 : 1);
+    buffer.addByte(frame.packetType.value);
     buffer.addByte(sessionBytes.length);
     buffer.add(sessionBytes);
     buffer.add(_uint32(frame.frameId));
@@ -36,7 +34,8 @@ abstract final class ColorMatrixSerializer {
 
     var offset = 4;
     final version = bytes[offset++];
-    final isMetadata = bytes[offset++] == 0;
+    final packetTypeValue = bytes[offset++];
+    final packetType = ColorMatrixPacketType.fromValue(packetTypeValue);
     final sessionLen = bytes[offset++];
     if (offset + sessionLen > bytes.length) return null;
     late final String sessionId;
@@ -78,7 +77,7 @@ abstract final class ColorMatrixSerializer {
       sessionId: sessionId,
       frameId: frameId,
       packetId: packetId,
-      isMetadata: isMetadata,
+      packetType: packetType,
       totalPackets: totalPackets,
       payload: payload,
       checksum: checksum,

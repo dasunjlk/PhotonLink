@@ -14,7 +14,10 @@ import '../../protocols/interfaces/transfer_session.dart';
 import '../../protocols/transfer_method.dart';
 import '../core/integrity_verifier.dart';
 import '../core/payload_pipeline.dart';
+import '../../settings/application/settings_controller.dart';
+import '../../settings/domain/app_settings.dart';
 import '../core/transfer_limits.dart';
+import '../fec/models/fec_statistics.dart';
 import '../persistence/session_persistence_manager_impl.dart';
 import '../qr/qr_frame_codec.dart';
 import '../qr/qr_stream_controller.dart';
@@ -43,6 +46,8 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
   SessionPersistenceManagerImpl get _persistence =>
       ref.read(sessionPersistenceManagerProvider);
 
+  AppSettings get _settings => ref.read(settingsProvider);
+
   void startReceiving() {
     _ctx.reset();
     _statusStream = QrStreamController();
@@ -68,6 +73,8 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
         _handleMetadata(metadata);
       case DataPacket data:
         unawaited(_handleData(data));
+      case ParityPacket parity:
+        _handleParity(parity);
       case ControlPacket control:
         _handleControl(control);
       default:
@@ -115,6 +122,7 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
       return;
     }
     _ctx.bindSession(metadata);
+    _ctx.configureFec(_ctx.fecFromSettings(_settings));
     _transition(TransferPhase.receiving);
     final savings = (metadata.originalSize ?? metadata.fileSize) -
         metadata.fileSize;
@@ -181,8 +189,52 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
     }
   }
 
+  void _handleParity(ParityPacket parity) {
+    if (_ctx.metadata == null) return;
+    if (parity.sessionId != _ctx.metadata!.sessionId) return;
+    _ctx.fecRecovery.ingestParity(parity);
+  }
+
+  Future<void> _attemptFecRecovery() async {
+    if (!_ctx.fecRecovery.config.enabled || _ctx.metadata == null) return;
+
+    _ctx.reconstruction.reset();
+    _ctx.reconstruction.ingest(_ctx.metadata!);
+
+    for (final id in _ctx.tracker.receivedIds) {
+      final chunk = await _ctx.chunkStore.loadChunk(
+        sessionId: _ctx.metadata!.sessionId,
+        chunkId: id,
+      );
+      if (chunk != null) {
+        _ctx.reconstruction.ingest(
+          DataPacket(
+            sessionId: _ctx.metadata!.sessionId,
+            chunkId: id,
+            totalChunks: _ctx.metadata!.totalChunks,
+            payload: chunk,
+          ),
+        );
+      }
+    }
+
+    final result = _ctx.fecRecovery.attemptRecovery(_ctx.reconstruction);
+    for (final entry in result.recovered.entries) {
+      if (_ctx.tracker.recordReceived(entry.key)) {
+        await _ctx.chunkStore.saveChunk(
+          sessionId: entry.value.sessionId,
+          chunkId: entry.value.chunkId,
+          payload: entry.value.payload,
+        );
+      }
+    }
+  }
+
   Future<void> _showStatusToSender() async {
     if (_ctx.metadata == null || _statusStream == null) return;
+
+    await _attemptFecRecovery();
+
     if (_ctx.tracker.isComplete) {
       await _finalizeTransfer();
       return;
@@ -218,6 +270,7 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
     final metadata = _ctx.metadata!;
     _ctx.reconstruction.reset();
     _ctx.reconstruction.ingest(metadata);
+    await _attemptFecRecovery();
     for (final id in _ctx.tracker.receivedIds) {
       final chunk = await _ctx.chunkStore.loadChunk(
         sessionId: metadata.sessionId,
@@ -286,6 +339,8 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
       final diag = _ctx.diagnostics.snapshot;
       final snap = _ctx.throughput.snapshot();
 
+      final fecStats = _ctx.fecRecovery.statistics;
+
       await ref.read(historyRepositoryProvider).addRecord(
             TransferRecord(
               id: '${metadata.sessionId}-rx-${DateTime.now().millisecondsSinceEpoch}',
@@ -305,6 +360,10 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
               compressionRatio: state.compressionRatio,
               transferSpeedBytesPerSec: snap.averageBytesPerSec,
               protocolVersion: metadata.protocolVersion,
+              fecProfile: _ctx.fecRecovery.config.profile.id,
+              packetsRecovered: fecStats.packetsRecovered,
+              recoveryRate: fecStats.recoverySuccessRate,
+              parityOverhead: fecStats.fecOverhead,
             ),
           );
       ref.invalidate(historyProvider);

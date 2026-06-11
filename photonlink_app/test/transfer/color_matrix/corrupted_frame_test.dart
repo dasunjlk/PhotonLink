@@ -27,7 +27,7 @@ void main() {
       sessionId: frame.sessionId,
       frameId: frame.frameId,
       packetId: frame.packetId,
-      isMetadata: frame.isMetadata,
+      packetType: frame.packetType,
       totalPackets: frame.totalPackets,
       payload: frame.payload,
       checksum: frame.checksum,
