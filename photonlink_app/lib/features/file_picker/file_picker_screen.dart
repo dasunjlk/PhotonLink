@@ -6,10 +6,9 @@ import 'package:flutter/material.dart';
 
 import '../../core/errors/app_exceptions.dart';
 import '../../protocols/transfer_method.dart';
-import '../../shared/widgets/animated_pill_button.dart';
-import '../../shared/widgets/glass_card.dart';
+import '../../shared/components/components.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
-import '../../shared/widgets/staggered_reveal.dart';
+import '../../shared/widgets/inner_screen_header.dart';
 import '../../ui/spacing.dart';
 
 /// Local file picker prototype — selects files but does not transfer yet.
@@ -94,94 +93,105 @@ class _FilePickerScreenState extends State<FilePickerScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final file = _selectedFile;
+    final accent = widget.method.accentColor;
 
     return GradientScaffold(
-      appBar: photonAppBar(
-        context,
-        title: 'Send — ${widget.method.displayName}',
-      ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.screenPadding),
-          child: StaggeredReveal(
-            children: [
-              GlassCard(
-                accentColor: widget.method.accentColor,
-                child: Column(
-                  children: [
-                    Icon(
-                      file != null
-                          ? Icons.insert_drive_file_rounded
-                          : Icons.folder_open_rounded,
-                      size: 64,
-                      color: widget.method.accentColor,
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Text(
-                      file?.name ?? 'No file selected',
-                      style: theme.textTheme.titleMedium,
-                      textAlign: TextAlign.center,
-                    ),
-                    if (file != null) ...[
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        _formatSize(file.size),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      if (file.extension != null) ...[
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          'Type: .${file.extension}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
+        child: Column(
+          children: [
+            InnerScreenHeader(title: 'Send · ${widget.method.displayName}'),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.screenPadding),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: Column(
+                      children: [
+                        PhotonCard(
+                          accentColor: accent,
+                          child: Column(
+                            children: [
+                              Icon(
+                                file != null
+                                    ? Icons.insert_drive_file_rounded
+                                    : Icons.folder_open_rounded,
+                                size: 64,
+                                color: accent,
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              Text(
+                                file?.name ?? 'No file selected',
+                                style: theme.textTheme.titleMedium,
+                                textAlign: TextAlign.center,
+                              ),
+                              if (file != null) ...[
+                                const SizedBox(height: AppSpacing.sm),
+                                Text(
+                                  _formatSize(file.size),
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                if (file.extension != null)
+                                  Text(
+                                    'Type: .${file.extension}',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                if (!kIsWeb &&
+                                    file.path != null &&
+                                    !Platform.isWindows)
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                        top: AppSpacing.xs,),
+                                    child: Text(
+                                      file.path!,
+                                      style:
+                                          theme.textTheme.bodySmall?.copyWith(
+                                        color: theme.colorScheme.outline,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                              ],
+                            ],
                           ),
                         ),
-                      ],
-                      if (!kIsWeb &&
-                          file.path != null &&
-                          !Platform.isWindows) ...[
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          file.path!,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.outline,
+                        if (_errorMessage != null) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          Text(
+                            _errorMessage!,
+                            style: TextStyle(color: theme.colorScheme.error),
+                            textAlign: TextAlign.center,
                           ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
+                        ],
+                        const SizedBox(height: AppSpacing.lg),
+                        PhotonButton(
+                          label: _isPicking ? 'Selecting…' : 'Choose File',
+                          icon: Icons.attach_file_rounded,
+                          accentColor: accent,
+                          loading: _isPicking,
+                          onPressed: _isPicking ? null : _pickFile,
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        PhotonButton(
+                          label: 'Prepare Transmission',
+                          icon: Icons.send_rounded,
+                          variant: PhotonButtonVariant.secondary,
+                          accentColor: accent,
+                          onPressed: file != null ? _showPhase2Dialog : null,
                         ),
                       ],
-                    ],
-                  ],
+                    ),
+                  ),
                 ),
               ),
-              if (_errorMessage != null) ...[
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  _errorMessage!,
-                  style: TextStyle(color: theme.colorScheme.error),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-              const SizedBox(height: AppSpacing.sectionGap),
-              AnimatedPillButton(
-                label: _isPicking ? 'Selecting…' : 'Choose File',
-                icon: Icons.attach_file_rounded,
-                color: widget.method.accentColor,
-                onPressed: _isPicking ? null : _pickFile,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AnimatedPillButton(
-                label: 'Prepare Transmission',
-                icon: Icons.send_rounded,
-                color: widget.method.accentColor,
-                isOutlined: true,
-                onPressed: file != null ? _showPhase2Dialog : null,
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../shared/widgets/animated_pill_button.dart';
-import '../../shared/widgets/glass_card.dart';
+import '../../shared/components/components.dart';
+import '../../shared/widgets/completion_hero.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
+import '../../shared/widgets/inner_screen_header.dart';
 import '../../transfer/application/color_matrix_transfer_state.dart';
 import '../../ui/spacing.dart';
 
@@ -18,85 +19,99 @@ class ColorMatrixCompletionScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final success = state.phase == TransferPhase.completed;
+    final diag = state.diagnostics;
 
     return GradientScaffold(
-      appBar: photonAppBar(context, title: 'Transfer Complete'),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.screenPadding),
-          child: Column(
-            children: [
-              Icon(
-                success ? Icons.check_circle_rounded : Icons.error_rounded,
-                size: 80,
-                color: success
-                    ? Colors.greenAccent
-                    : theme.colorScheme.error,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                success ? 'Transfer Successful' : 'Transfer Failed',
-                style: theme.textTheme.headlineSmall,
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              GlassCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (state.session != null) ...[
-                      _row('File', state.session!.fileName),
-                      _row('Chunks', '${state.totalChunks}'),
-                    ],
-                    if (state.outputPath != null)
-                      _row('Saved to', state.outputPath!),
-                    if (state.errorMessage != null)
-                      _row('Error', state.errorMessage!),
-                    _row(
-                      'Integrity',
-                      state.integrityValid == true ? 'Verified' : 'Failed',
+        child: Column(
+          children: [
+            InnerScreenHeader(
+              title: success ? 'Transfer Complete' : 'Transfer Failed',
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.screenPadding),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: AppSpacing.lg),
+                        CompletionHero(
+                          success: success,
+                          title: success
+                              ? 'Transfer Successful'
+                              : 'Transfer Failed',
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        PhotonCard(
+                          child: Column(
+                            children: [
+                              if (state.session != null) ...[
+                                PhotonInfoTile(
+                                  label: 'File',
+                                  value: state.session!.fileName,
+                                  dense: true,
+                                ),
+                                PhotonInfoTile(
+                                  label: 'Chunks',
+                                  value: '${state.totalChunks}',
+                                  dense: true,
+                                ),
+                              ],
+                              if (state.outputPath != null)
+                                PhotonInfoTile(
+                                  label: 'Saved to',
+                                  value: state.outputPath!,
+                                  dense: true,
+                                ),
+                              if (state.errorMessage != null)
+                                PhotonInfoTile(
+                                  label: 'Error',
+                                  value: state.errorMessage!,
+                                  dense: true,
+                                ),
+                              PhotonInfoTile(
+                                label: 'Integrity',
+                                dense: true,
+                                valueWidget: PhotonStatusBadge(
+                                  label: state.integrityValid == true
+                                      ? 'Verified'
+                                      : 'Failed',
+                                  tone: state.integrityValid == true
+                                      ? PhotonStatusTone.success
+                                      : PhotonStatusTone.error,
+                                  compact: true,
+                                ),
+                              ),
+                              PhotonInfoTile(
+                                label: 'Frames received',
+                                value: '${diag.framesReceived}',
+                                dense: true,
+                              ),
+                              PhotonInfoTile(
+                                label: 'Corrupted',
+                                value: '${diag.framesCorrupted}',
+                                dense: true,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        PhotonButton(
+                          label: 'Done',
+                          icon: Icons.home_rounded,
+                          onPressed: () => context.go('/'),
+                        ),
+                      ],
                     ),
-                    _row(
-                      'Frames received',
-                      '${state.diagnostics.framesReceived}',
-                    ),
-                    _row(
-                      'Corrupted',
-                      '${state.diagnostics.framesCorrupted}',
-                    ),
-                  ],
+                  ),
                 ),
               ),
-              const Spacer(),
-              AnimatedPillButton(
-                label: 'Done',
-                icon: Icons.home_rounded,
-                color: theme.colorScheme.primary,
-                onPressed: () => context.go('/'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _row(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 110,
-            child: Text(
-              label,
-              style: const TextStyle(fontWeight: FontWeight.w600),
             ),
-          ),
-          Expanded(child: Text(value)),
-        ],
+          ],
+        ),
       ),
     );
   }

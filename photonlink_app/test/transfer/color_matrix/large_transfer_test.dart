@@ -16,6 +16,7 @@ void main() {
       fileBytes: bytes,
       chunkManager: engine,
       encoder: codec,
+      fileName: 'large.bin',
     );
 
     expect(chunkSize, greaterThan(0));
