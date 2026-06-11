@@ -9,7 +9,7 @@ enum TransferMethod {
     displayName: 'QR Transfer',
     description: 'Encode files as scannable QR code sequences',
     icon: Icons.qr_code_2_rounded,
-    accentColor: AppColors.qrAccent,
+    accentColor: AppColors.ashLight,
     isAvailable: true,
   ),
   colorMatrix(
@@ -17,7 +17,7 @@ enum TransferMethod {
     displayName: 'Color Matrix',
     description: 'High-density color grid data encoding',
     icon: Icons.grid_view_rounded,
-    accentColor: AppColors.colorMatrixAccent,
+    accentColor: AppColors.ashLight,
     isAvailable: true,
   ),
   opticalStream(
@@ -25,7 +25,7 @@ enum TransferMethod {
     displayName: 'Optical Stream',
     description: 'Continuous visual frame streaming',
     icon: Icons.videocam_rounded,
-    accentColor: AppColors.opticalStreamAccent,
+    accentColor: AppColors.ash,
     isAvailable: false,
     isPreview: true,
   ),
@@ -34,7 +34,7 @@ enum TransferMethod {
     displayName: 'Audio Transfer',
     description: 'Acoustic data transmission (future)',
     icon: Icons.graphic_eq_rounded,
-    accentColor: AppColors.audioAccent,
+    accentColor: AppColors.ash,
     isAvailable: false,
   ),
   flash(
@@ -42,7 +42,7 @@ enum TransferMethod {
     displayName: 'Flash Transfer',
     description: 'LED strobe data transmission (future)',
     icon: Icons.flash_on_rounded,
-    accentColor: AppColors.flashAccent,
+    accentColor: AppColors.ashDark,
     isAvailable: false,
   );
 

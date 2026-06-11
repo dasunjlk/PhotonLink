@@ -79,7 +79,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                       : Icons.filter_alt_outlined,
                   tooltip: 'Filters',
                   accentColor: _hasActiveFilters
-                      ? Theme.of(context).colorScheme.primary
+                      ? Theme.of(context).colorScheme.onSurface
                       : null,
                   onPressed: _openFilters,
                 ),
@@ -476,13 +476,14 @@ class _EmptyState extends StatelessWidget {
               width: 88,
               height: 88,
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
                 borderRadius: AppRadii.xlRadius,
+                border: Border.all(color: theme.colorScheme.outline),
               ),
               child: Icon(
                 hasRecords ? Icons.search_off_rounded : Icons.history_rounded,
                 size: 44,
-                color: theme.colorScheme.primary,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: AppSpacing.lg),

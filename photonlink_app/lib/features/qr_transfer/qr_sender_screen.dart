@@ -300,7 +300,7 @@ class _PickView extends StatelessWidget {
                 const SizedBox(height: AppSpacing.md),
                 Text(
                   state.errorMessage!,
-                  style: TextStyle(color: theme.colorScheme.error),
+                  style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
                   textAlign: TextAlign.center,
                 ),
               ],

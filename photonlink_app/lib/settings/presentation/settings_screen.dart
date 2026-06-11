@@ -458,7 +458,7 @@ class _FecSection extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
           child: Row(
             children: [
-              Icon(Icons.shield_moon_rounded, color: theme.colorScheme.primary),
+              Icon(Icons.shield_moon_rounded, color: theme.colorScheme.onSurface),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Text(
@@ -579,7 +579,7 @@ class _HistorySection extends ConsumerWidget {
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: Icon(Icons.delete_outline_rounded,
-              color: Theme.of(context).colorScheme.error,),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,),
           title: const Text('Clear History'),
           subtitle: const Text('Remove all saved transfer records'),
           onTap: () => _confirmClear(context, ref),
@@ -646,9 +646,12 @@ class _LanguageSection extends ConsumerWidget {
             trailing: settings.language == entry.key
                 ? Icon(
                     Icons.check_circle_rounded,
-                    color: Theme.of(context).colorScheme.primary,
+                    color: Theme.of(context).colorScheme.onSurface,
                   )
-                : const Icon(Icons.circle_outlined),
+                : Icon(
+                    Icons.circle_outlined,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
             onTap: () => controller.updateLanguage(entry.key),
           ),
           if (entry.key != _languages.keys.last) const Divider(height: 1),
@@ -683,11 +686,12 @@ class _AboutSection extends ConsumerWidget {
                     width: 56,
                     height: 56,
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
                       borderRadius: AppRadii.mdRadius,
+                      border: Border.all(color: theme.colorScheme.outline),
                     ),
                     child: Icon(Icons.bolt_rounded,
-                        color: theme.colorScheme.primary, size: 30,),
+                        color: theme.colorScheme.onSurface, size: 30,),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Column(

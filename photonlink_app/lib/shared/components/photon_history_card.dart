@@ -25,7 +25,7 @@ class PhotonHistoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accent = record.method.accentColor;
+    final accent = theme.colorScheme.onSurface;
     final dateFmt = DateFormat.yMMMd();
     final timeFmt = DateFormat.jm();
 
@@ -44,9 +44,9 @@ class PhotonHistoryCard extends StatelessWidget {
                 width: 46,
                 height: 46,
                 decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.15),
+                  color: theme.colorScheme.surfaceContainerHighest,
                   borderRadius: AppRadii.mdRadius,
-                  border: Border.all(color: accent.withValues(alpha: 0.35)),
+                  border: Border.all(color: theme.colorScheme.outline),
                 ),
                 child: Icon(record.method.icon, color: accent, size: 22),
               ),
@@ -101,19 +101,23 @@ class PhotonHistoryCard extends StatelessWidget {
                 vertical: AppSpacing.xs,
               ),
               decoration: BoxDecoration(
-                color: theme.colorScheme.error.withValues(alpha: 0.12),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
                 borderRadius: AppRadii.smRadius,
+                border: Border.all(
+                  color: theme.colorScheme.outline.withValues(alpha: 0.6),
+                ),
               ),
               child: Row(
                 children: [
                   Icon(Icons.report_problem_rounded,
-                      size: 14, color: theme.colorScheme.error,),
+                      size: 14,
+                      color: theme.colorScheme.onSurfaceVariant,),
                   const SizedBox(width: AppSpacing.xs),
                   Expanded(
                     child: Text(
                       record.failureReason!,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.error,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),

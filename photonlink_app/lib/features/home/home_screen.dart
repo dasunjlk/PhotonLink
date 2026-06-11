@@ -101,15 +101,16 @@ class _Branding extends StatelessWidget {
               colors: AppColors.brandGradient,
             ),
             borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.ashDark),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.4),
+                color: AppColors.black.withValues(alpha: 0.5),
                 blurRadius: 28,
                 offset: const Offset(0, 10),
               ),
             ],
           ),
-          child: const Icon(Icons.bolt_rounded, color: Colors.white, size: 40),
+          child: const Icon(Icons.bolt_rounded, color: AppColors.white, size: 40),
         )
             .animate()
             .scale(duration: AppMotion.normal, curve: AppMotion.enter)

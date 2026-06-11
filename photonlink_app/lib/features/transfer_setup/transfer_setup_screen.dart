@@ -100,10 +100,9 @@ class _DescriptionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accent = method.accentColor;
+    final scheme = theme.colorScheme;
 
     return PhotonCard(
-      accentColor: accent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -112,18 +111,11 @@ class _DescriptionCard extends StatelessWidget {
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  accent.withValues(alpha: 0.3),
-                  accent.withValues(alpha: 0.12),
-                ],
-              ),
+              color: scheme.surfaceContainerHighest,
               borderRadius: AppRadii.lgRadius,
-              border: Border.all(color: accent.withValues(alpha: 0.4)),
+              border: Border.all(color: scheme.outline),
             ),
-            child: Icon(method.icon, color: accent, size: 32),
+            child: Icon(method.icon, color: scheme.onSurface, size: 32),
           ),
           const SizedBox(height: AppSpacing.lg),
           Text(method.displayName, style: theme.textTheme.headlineSmall),
@@ -168,7 +160,7 @@ class _Feature extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: theme.colorScheme.primary),
+          Icon(icon, size: 18, color: theme.colorScheme.onSurface),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(label, style: theme.textTheme.bodyMedium),
@@ -192,8 +184,6 @@ class _ActionsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return PhotonCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -207,7 +197,6 @@ class _ActionsCard extends StatelessWidget {
             icon: Icons.upload_file_rounded,
             title: 'Send File',
             subtitle: 'Pick a file and transmit it optically',
-            accent: method.accentColor,
             onTap: onSend,
           ),
           const SizedBox(height: AppSpacing.md),
@@ -215,7 +204,6 @@ class _ActionsCard extends StatelessWidget {
             icon: Icons.download_rounded,
             title: 'Receive File',
             subtitle: 'Scan the sender to receive a file',
-            accent: theme.colorScheme.secondary,
             onTap: onReceive,
           ),
         ],
@@ -229,23 +217,21 @@ class _ActionTile extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
-    required this.accent,
     required this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
-  final Color accent;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     return PhotonCard(
       onTap: onTap,
-      accentColor: accent,
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Row(
         children: [
@@ -253,10 +239,11 @@ class _ActionTile extends StatelessWidget {
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.16),
+              color: scheme.surfaceContainerHighest,
               borderRadius: AppRadii.mdRadius,
+              border: Border.all(color: scheme.outline),
             ),
-            child: Icon(icon, color: accent, size: 28),
+            child: Icon(icon, color: scheme.onSurface, size: 28),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
@@ -274,7 +261,7 @@ class _ActionTile extends StatelessWidget {
               ],
             ),
           ),
-          Icon(Icons.arrow_forward_rounded, color: accent),
+          Icon(Icons.arrow_forward_rounded, color: scheme.onSurfaceVariant),
         ],
       ),
     );

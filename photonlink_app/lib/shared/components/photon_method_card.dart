@@ -28,7 +28,7 @@ class PhotonMethodCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accent = method.accentColor;
+    final accent = theme.colorScheme.onSurface;
     final disabled = !method.isAvailable;
 
     final badge = method.isPreview
@@ -51,16 +51,9 @@ class PhotonMethodCard extends StatelessWidget {
       width: compact ? 52 : 60,
       height: compact ? 52 : 60,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            accent.withValues(alpha: 0.28),
-            accent.withValues(alpha: 0.12),
-          ],
-        ),
+        color: theme.colorScheme.surfaceContainerHighest,
         borderRadius: AppRadii.mdRadius,
-        border: Border.all(color: accent.withValues(alpha: 0.4)),
+        border: Border.all(color: theme.colorScheme.outline),
       ),
       child: Icon(method.icon, color: accent, size: compact ? 26 : 30),
     );
@@ -69,7 +62,6 @@ class PhotonMethodCard extends StatelessWidget {
       opacity: disabled ? 0.55 : 1,
       child: PhotonCard(
         onTap: onTap,
-        accentColor: accent,
         semanticLabel: '${method.displayName}. ${method.description}',
         child: compact
             ? Row(

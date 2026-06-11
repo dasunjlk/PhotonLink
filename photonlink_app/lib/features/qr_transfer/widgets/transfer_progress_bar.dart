@@ -13,12 +13,15 @@ class TransferProgressBar extends StatelessWidget {
 
   final double progress;
   final String label;
+
+  /// Kept for API compatibility; bar color uses [ColorScheme.onSurface].
   final Color? accentColor;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final color = accentColor ?? theme.colorScheme.primary;
+    final scheme = theme.colorScheme;
+    final color = scheme.onSurface;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -39,7 +42,7 @@ class TransferProgressBar extends StatelessWidget {
           child: LinearProgressIndicator(
             value: progress.clamp(0, 1),
             minHeight: 8,
-            backgroundColor: theme.colorScheme.surfaceContainerHighest,
+            backgroundColor: scheme.surfaceContainerHighest,
             color: color,
           ),
         ),
