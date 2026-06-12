@@ -38,7 +38,7 @@ class QrTransport implements Transport<String> {
   TransportCapabilities get capabilities => const TransportCapabilities(
         supportsCompression: true,
         supportsEncryption: true,
-        supportsReliabilityFeedback: false,
+        supportsReliabilityFeedback: true,
         defaultFramesPerSecond: 2.0,
         maxFileBytes: TransferLimits.maxQrFileBytes,
       );

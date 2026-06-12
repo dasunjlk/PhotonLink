@@ -133,6 +133,35 @@ class SettingsController extends StateNotifier<AppSettings> {
     state = state.copyWith(adaptiveFecEnabled: enabled);
     await _repository.save(state);
   }
+
+  Future<void> updateOpticalStreamSpeed(double fps) async {
+    state = state.copyWith(opticalStreamSpeed: fps.clamp(2.0, 15.0));
+    await _repository.save(state);
+  }
+
+  Future<void> updateOpticalStreamDensity(int grid) async {
+    state = state.copyWith(opticalStreamDensity: grid);
+    await _repository.save(state);
+  }
+
+  Future<void> updateOpticalSyncAggressiveness(double value) async {
+    state = state.copyWith(
+      opticalSyncAggressiveness: value.clamp(0.2, 1.0),
+    );
+    await _repository.save(state);
+  }
+
+  Future<void> updateOpticalRecoverySensitivity(double value) async {
+    state = state.copyWith(
+      opticalRecoverySensitivity: value.clamp(0.2, 1.0),
+    );
+    await _repository.save(state);
+  }
+
+  Future<void> toggleOpticalStreamDiagnostics(bool enabled) async {
+    state = state.copyWith(opticalStreamDiagnostics: enabled);
+    await _repository.save(state);
+  }
 }
 
 final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {

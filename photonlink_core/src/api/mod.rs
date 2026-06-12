@@ -9,7 +9,7 @@ use crate::encryption;
 use crate::error::{catch_core, CoreError, CoreResult};
 use crate::fec::{self, FecConfig};
 use crate::hashing;
-use crate::packet::{self, Pl2Frame, PlcmFrame};
+use crate::packet::{self, Pl2Frame, PlcmFrame, PlosFrame};
 use crate::protocol;
 use crate::reconstruction::{self, ReconstructionState};
 
@@ -80,6 +80,25 @@ pub fn decode_plcm_frame(bytes: Vec<u8>) -> Result<PlcmFrameDto, String> {
     catch_core(|| {
         packet::decode_plcm_frame(&bytes)
             .map(PlcmFrameDto::from)
+            .map_err(|e| CoreError::DecodeFailed(e.to_string()))
+    })
+    .map_err(|e| e.to_string())
+}
+
+#[frb(sync)]
+pub fn encode_plos_frame(frame: PlosFrameDto) -> Result<Vec<u8>, String> {
+    catch_core(|| {
+        packet::encode_plos_frame(&frame.into())
+            .map_err(|e| CoreError::EncodeFailed(e.to_string()))
+    })
+    .map_err(|e| e.to_string())
+}
+
+#[frb(sync)]
+pub fn decode_plos_frame(bytes: Vec<u8>) -> Result<PlosFrameDto, String> {
+    catch_core(|| {
+        packet::decode_plos_frame(&bytes)
+            .map(PlosFrameDto::from)
             .map_err(|e| CoreError::DecodeFailed(e.to_string()))
     })
     .map_err(|e| e.to_string())
@@ -278,6 +297,64 @@ impl From<PlcmFrameDto> for packet::PlcmFrame {
             total_packets: d.total_packets,
             grid_size: d.grid_size,
             bits_per_channel: d.bits_per_channel,
+            payload: d.payload,
+            checksum: d.checksum,
+        }
+    }
+}
+
+#[frb]
+pub struct PlosFrameDto {
+    pub protocol_version: u8,
+    pub session_id: String,
+    pub stream_id: u16,
+    pub frame_id: u32,
+    pub packet_id: u32,
+    pub packet_type: u8,
+    pub total_packets: u32,
+    pub sync_marker: u16,
+    pub timestamp: u64,
+    pub grid_size: u32,
+    pub bits_per_cell: u8,
+    pub payload: Vec<u8>,
+    pub checksum: u32,
+}
+
+impl From<PlosFrame> for PlosFrameDto {
+    fn from(f: packet::PlosFrame) -> Self {
+        Self {
+            protocol_version: f.protocol_version,
+            session_id: f.session_id,
+            stream_id: f.stream_id,
+            frame_id: f.frame_id,
+            packet_id: f.packet_id,
+            packet_type: f.packet_type.value(),
+            total_packets: f.total_packets,
+            sync_marker: f.sync_marker,
+            timestamp: f.timestamp,
+            grid_size: f.grid_size,
+            bits_per_cell: f.bits_per_cell,
+            payload: f.payload,
+            checksum: f.checksum,
+        }
+    }
+}
+
+impl From<PlosFrameDto> for packet::PlosFrame {
+    fn from(d: PlosFrameDto) -> Self {
+        Self {
+            protocol_version: d.protocol_version,
+            session_id: d.session_id,
+            stream_id: d.stream_id,
+            frame_id: d.frame_id,
+            packet_id: d.packet_id,
+            packet_type: packet::PlosPacketType::from_value(d.packet_type)
+                .unwrap_or(packet::PlosPacketType::Data),
+            total_packets: d.total_packets,
+            sync_marker: d.sync_marker,
+            timestamp: d.timestamp,
+            grid_size: d.grid_size,
+            bits_per_cell: d.bits_per_cell,
             payload: d.payload,
             checksum: d.checksum,
         }

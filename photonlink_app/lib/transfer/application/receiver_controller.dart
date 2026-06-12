@@ -21,6 +21,7 @@ import '../core/transfer_limits.dart';
 import '../persistence/session_persistence_manager_impl.dart';
 import '../qr/qr_frame_codec.dart';
 import '../qr/qr_stream_controller.dart';
+import '../security/safe_filename.dart';
 import '../reliability/models/persisted_session.dart';
 import 'reliable_transfer_context.dart';
 import 'transfer_providers.dart';
@@ -90,6 +91,7 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
       if (setup.encryption == EncryptionMode.enabled) {
         final key = await _ctx.keyExchange.acceptFromReceiver(
           setup.keyExchangePayload,
+          sessionId: setup.sessionId,
         );
         _ctx.keyProvider.setSessionKey(key);
       }
@@ -330,8 +332,7 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
       }
 
       final dir = await getApplicationDocumentsDirectory();
-      final safeName =
-          metadata.fileName.replaceAll(RegExp(r'[^\w.\-]'), '_');
+      final safeName = safeTransferFilename(metadata.fileName);
       final outputPath = '${dir.path}/$safeName';
       await File(outputPath).writeAsBytes(plain);
 

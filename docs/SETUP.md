@@ -128,7 +128,8 @@ Expected if Rust toolchain is not installed. App uses Dart backend automatically
 
 - Rust backend requires toolchain + FRB codegen (Dart backend active by default)
 - LZ4 compression disabled in Dart (available in Rust when activated)
-- Optical Stream and Audio transports are UI stubs only
-- Color Matrix uses one-way cyclic broadcast (no ACK/NAK feedback channel)
+- Audio transport is not yet implemented
+- Color Matrix and Optical Stream use one-way cyclic broadcast (no ACK/NAK feedback channel)
+- Android release signing requires `android/key.properties` (see `key.properties.example`)
 
 See [MIGRATION_REPORT.md](MIGRATION_REPORT.md) and [PHASE9_READINESS.md](PHASE9_READINESS.md).

@@ -25,6 +25,8 @@ class TransferSetupScreen extends StatelessWidget {
         context.push(AppRoutes.qrSend);
       case TransferMethod.colorMatrix:
         context.push(AppRoutes.colorMatrixSend);
+      case TransferMethod.opticalStream:
+        context.push(AppRoutes.opticalStreamSend);
       default:
         context.push('${AppRoutes.pick}?method=${method.routeName}');
     }
@@ -36,6 +38,8 @@ class TransferSetupScreen extends StatelessWidget {
         context.push(AppRoutes.qrReceive);
       case TransferMethod.colorMatrix:
         context.push(AppRoutes.colorMatrixReceive);
+      case TransferMethod.opticalStream:
+        context.push(AppRoutes.opticalStreamReceive);
       default:
         context.push('${AppRoutes.scan}?method=${method.routeName}');
     }

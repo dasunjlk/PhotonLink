@@ -32,6 +32,11 @@ class AppSettings {
     this.fecProfile = FecProfile.balanced,
     this.redundancyPercent = 10,
     this.adaptiveFecEnabled = true,
+    this.opticalStreamSpeed = 8.0,
+    this.opticalStreamDensity = 24,
+    this.opticalSyncAggressiveness = 0.6,
+    this.opticalRecoverySensitivity = 0.5,
+    this.opticalStreamDiagnostics = true,
   });
 
   final ThemeMode themeMode;
@@ -57,6 +62,11 @@ class AppSettings {
   final FecProfile fecProfile;
   final int redundancyPercent;
   final bool adaptiveFecEnabled;
+  final double opticalStreamSpeed;
+  final int opticalStreamDensity;
+  final double opticalSyncAggressiveness;
+  final double opticalRecoverySensitivity;
+  final bool opticalStreamDiagnostics;
 
   CompressionType get effectiveCompression =>
       compressionEnabled ? compressionMode : CompressionType.none;
@@ -85,6 +95,11 @@ class AppSettings {
     FecProfile? fecProfile,
     int? redundancyPercent,
     bool? adaptiveFecEnabled,
+    double? opticalStreamSpeed,
+    int? opticalStreamDensity,
+    double? opticalSyncAggressiveness,
+    double? opticalRecoverySensitivity,
+    bool? opticalStreamDiagnostics,
   }) {
     return AppSettings(
       themeMode: themeMode ?? this.themeMode,
@@ -114,6 +129,14 @@ class AppSettings {
       fecProfile: fecProfile ?? this.fecProfile,
       redundancyPercent: redundancyPercent ?? this.redundancyPercent,
       adaptiveFecEnabled: adaptiveFecEnabled ?? this.adaptiveFecEnabled,
+      opticalStreamSpeed: opticalStreamSpeed ?? this.opticalStreamSpeed,
+      opticalStreamDensity: opticalStreamDensity ?? this.opticalStreamDensity,
+      opticalSyncAggressiveness:
+          opticalSyncAggressiveness ?? this.opticalSyncAggressiveness,
+      opticalRecoverySensitivity:
+          opticalRecoverySensitivity ?? this.opticalRecoverySensitivity,
+      opticalStreamDiagnostics:
+          opticalStreamDiagnostics ?? this.opticalStreamDiagnostics,
     );
   }
 }

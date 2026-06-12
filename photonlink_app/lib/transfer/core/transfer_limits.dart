@@ -6,6 +6,9 @@ abstract final class TransferLimits {
   /// Maximum file size accepted for Color Matrix transfer (~2 MB).
   static const int maxColorMatrixFileBytes = 2 * 1024 * 1024;
 
+  /// Maximum file size accepted for Optical Stream transfer (~4 MB).
+  static const int maxOpticalStreamFileBytes = 4 * 1024 * 1024;
+
   /// Legacy alias for QR max file size.
   static const int maxFileBytes = maxQrFileBytes;
 
@@ -43,6 +46,15 @@ abstract final class TransferLimits {
       sizeBytes,
       maxBytes: maxColorMatrixFileBytes,
       transportLabel: 'Color Matrix',
+    );
+  }
+
+  /// Optical Stream file size validation (up to 4 MB).
+  static void validateOpticalStreamFileSize(int sizeBytes) {
+    validateFileSize(
+      sizeBytes,
+      maxBytes: maxOpticalStreamFileBytes,
+      transportLabel: 'Optical Stream',
     );
   }
 

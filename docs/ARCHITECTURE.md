@@ -41,6 +41,7 @@ PhotonLink is an offline peer-to-peer file transfer platform using optical commu
 |--------|-----------|--------|
 | `qr` | `String` (PL2 wire) | `transfer/qr/` |
 | `colorMatrix` | `ColorMatrixFrame` | `transfer/color_matrix/` |
+| `opticalStream` | `OpticalStreamFrame` | `transfer/optical_stream/` |
 
 ## Efficiency Pipeline (Phase 4)
 
@@ -89,6 +90,18 @@ See [SECURITY.md](SECURITY.md) and [PHASE4_BENCHMARKS.md](PHASE4_BENCHMARKS.md).
 Controllers: `colorMatrixSenderControllerProvider`, `colorMatrixReceiverControllerProvider`.
 
 See [COLOR_MATRIX_FORMAT.md](COLOR_MATRIX_FORMAT.md).
+
+## Optical Stream Transfer (Phase 9)
+
+- PLOS v1 binary frames encoded as multi-bit brightness grids
+- Continuous cyclic streaming (default 8 fps, up to 15 fps)
+- Sync lanes, timing lanes, finder markers for camera lock
+- `StreamTimingController` for pacing and jitter control
+- Max file size 4 MB; reuses FEC, adaptive engine, compression, encryption
+
+Controllers: `opticalStreamSenderControllerProvider`, `opticalStreamReceiverControllerProvider`.
+
+See [OPTICAL_STREAM_FORMAT.md](OPTICAL_STREAM_FORMAT.md) and [OPTICAL_STREAM_ARCHITECTURE.md](OPTICAL_STREAM_ARCHITECTURE.md).
 
 ## Adaptive Optical Engine (Phase 6)
 
@@ -163,4 +176,4 @@ Controllers → services/core/ (CoreService, CompressionService, …)
 
 ## Future Transports
 
-`Transport<T>` abstraction supports `opticalStream`, `audio`, `flash` without changing the core pipeline. Adaptive engine and FEC layers are reusable by future transports. See [FUTURE_EXPANSION.md](FUTURE_EXPANSION.md) and [PHASE9_READINESS.md](PHASE9_READINESS.md).
+`Transport<T>` abstraction supports `audio`, `flash` without changing the core pipeline. Optical Stream (Phase 9) is now registered alongside QR and Color Matrix. See [FUTURE_EXPANSION.md](FUTURE_EXPANSION.md).

@@ -15,17 +15,23 @@ import 'impl/dart_diagnostics_service.dart';
 import 'impl/dart_encryption_service.dart';
 import 'impl/dart_fec_service.dart';
 import 'impl/dart_packet_service.dart';
+import 'impl/frb_core_api.dart';
 import 'packet_service.dart';
 import 'photon_link_core_api.dart';
 
-/// Active backend selection (default: dart).
+/// Active backend selection — overridden at bootstrap after Rust init.
 final backendProvider = Provider<CoreBackend>(
   (ref) => CoreBackend.dart,
 );
 
-/// Rust core API — returns [NotConnectedCoreApi] until FRB codegen is run.
+/// Rust FFI surface — overridden at bootstrap when the native core loads.
 final photonLinkCoreApiProvider = Provider<PhotonLinkCoreApi>(
-  (ref) => const NotConnectedCoreApi(),
+  (ref) {
+    if (ref.watch(backendProvider) == CoreBackend.rust) {
+      return const FrbCoreApi();
+    }
+    return const NotConnectedCoreApi();
+  },
 );
 
 final coreServiceProvider = Provider<CoreService>((ref) {

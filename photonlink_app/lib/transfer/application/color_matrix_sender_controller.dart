@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/protocol_versions.dart';
 import '../../history/application/history_controller.dart';
 import '../../history/domain/transfer_record.dart';
 import '../../protocols/interfaces/compression_type.dart';
@@ -106,8 +107,12 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
           ? EncryptionMode.enabled
           : EncryptionMode.disabled;
 
+      final sessionId = _sessionFactory.generateSessionId();
+
       if (encryption == EncryptionMode.enabled) {
-        final keyResult = await _keyExchange.generateForSender();
+        final keyResult = await _keyExchange.generateForSender(
+          sessionId: sessionId,
+        );
         _keyProvider.setSessionKey(keyResult.sessionKey);
         _keyExchangePayload = keyResult.payloadBase64;
       }
@@ -119,7 +124,6 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
         keyProvider: _keyProvider,
       );
 
-      final sessionId = _sessionFactory.generateSessionId();
       final preferredGrid = settings.adaptiveModeEnabled
           ? mapped.gridSize
           : settings.colorMatrixSize;
@@ -255,11 +259,12 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
             encryptionUsed:
                 _bundle!.metadata.encryption == EncryptionMode.enabled,
             profileUsed: state.transportProfile.id,
-            protocolVersion: 5,
+            protocolVersion: ProtocolVersions.metadataProtocolVersion,
             fecProfile: _fecRecovery.config.profile.id,
             parityOverhead: _fecRecovery.statistics.fecOverhead,
           ),
         );
+    ref.invalidate(historyProvider);
 
     state = state.copyWith(
       phase: TransferPhase.transmitting,
@@ -347,7 +352,7 @@ class ColorMatrixSenderController extends Notifier<ColorMatrixSenderState> {
             profileUsed: state.transportProfile.id,
             adaptiveEventCount: adaptive.diagnostics.appliedDecisionCount,
             environmentSummary: adaptive.state.environment.summary,
-            protocolVersion: 5,
+            protocolVersion: ProtocolVersions.metadataProtocolVersion,
             fecProfile: _fecRecovery.config.profile.id,
             packetsRecovered: _fecRecovery.statistics.packetsRecovered,
             recoveryRate: _fecRecovery.statistics.recoverySuccessRate,

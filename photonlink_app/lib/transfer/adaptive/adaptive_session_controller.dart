@@ -14,6 +14,7 @@ import 'models/adaptive_parameters.dart';
 import 'models/adaptive_tiers.dart';
 import 'models/transport_profile.dart';
 import 'parameter_mappers/color_matrix_parameter_mapper.dart';
+import 'parameter_mappers/optical_stream_parameter_mapper.dart';
 import 'quality_score_calculator.dart';
 import '../fec/fec_configuration_factory.dart';
 import '../fec/models/fec_configuration.dart';
@@ -28,7 +29,9 @@ class AdaptiveSessionController {
     QualityScoreCalculator? qualityCalculator,
     LightingCompensationManager? lightingManager,
     ColorMatrixParameterMapper? mapper,
+    OpticalStreamParameterMapper? opticalMapper,
     AdaptationDiagnostics? diagnostics,
+    bool useOpticalMapper = false,
   })  : _capabilityDetector =
             capabilityDetector ?? DeviceCapabilityDetector(),
         _environment = environmentAnalyzer ?? EnvironmentAnalyzer(),
@@ -36,6 +39,8 @@ class AdaptiveSessionController {
             qualityCalculator ?? const QualityScoreCalculator(),
         _lighting = lightingManager ?? const LightingCompensationManager(),
         _mapper = mapper ?? const ColorMatrixParameterMapper(),
+        _opticalMapper = opticalMapper ?? const OpticalStreamParameterMapper(),
+        _useOpticalMapper = useOpticalMapper,
         _adaptDiagnostics = diagnostics ?? AdaptationDiagnostics();
 
   final Ref ref;
@@ -44,6 +49,8 @@ class AdaptiveSessionController {
   final QualityScoreCalculator _qualityCalculator;
   final LightingCompensationManager _lighting;
   final ColorMatrixParameterMapper _mapper;
+  final OpticalStreamParameterMapper _opticalMapper;
+  final bool _useOpticalMapper;
   final AdaptationDiagnostics _adaptDiagnostics;
   final FecAdaptationPolicy _fecPolicy = const FecAdaptationPolicy();
   final FecConfigurationFactory _fecFactory = const FecConfigurationFactory();
@@ -94,27 +101,39 @@ class AdaptiveSessionController {
     if (settings.adaptiveModeEnabled) {
       final profile = settings.profileOverride.forcedProfile ??
           TransportProfile.fromId(settings.colorTransportQuality);
-      initial = _mapper.initialFromCapability(
-        capability: capability,
-        lastQualityScore: _lastSessionQualityScore,
-        profile: profile,
-      );
+      initial = _useOpticalMapper
+          ? _opticalMapper.initialFromCapability(
+              capability: capability,
+              lastQualityScore: _lastSessionQualityScore,
+              profile: profile,
+            )
+          : _mapper.initialFromCapability(
+              capability: capability,
+              lastQualityScore: _lastSessionQualityScore,
+              profile: profile,
+            );
       if (settings.profileOverride.forcedProfile != null) {
         initial = initial.copyWith(profile: settings.profileOverride.forcedProfile!);
       }
     } else {
-      initial = _mapper.fromManual(
-        gridSize: settings.colorMatrixSize,
-        bitsPerChannel: settings.colorBitsPerChannel,
-        fps: settings.colorTransferFrameRate,
-        profile: TransportProfile.fromId(settings.colorTransportQuality),
-      );
+      initial = _useOpticalMapper
+          ? _opticalMapper.fromManual(
+              gridSize: settings.opticalStreamDensity,
+              fps: settings.opticalStreamSpeed,
+              profile: TransportProfile.fromId(settings.colorTransportQuality),
+            )
+          : _mapper.fromManual(
+              gridSize: settings.colorMatrixSize,
+              bitsPerChannel: settings.colorBitsPerChannel,
+              fps: settings.colorTransferFrameRate,
+              profile: TransportProfile.fromId(settings.colorTransportQuality),
+            );
     }
 
     _senderEngine.setInitialParameters(initial);
     _receiverEngine.setInitialParameters(initial);
 
-    final mapped = _mapper.map(initial);
+    final mapped = _mapParams(initial);
     final fecConfig = _fecFactory.fromSettings(settings);
     _state = AdaptiveState(
       capability: capability,
@@ -124,6 +143,12 @@ class AdaptiveSessionController {
       processingThrottleMs: _throttleForTier(initial),
       fecConfiguration: fecConfig,
     );
+  }
+
+  ColorMatrixMappedParameters _mapParams(AdaptiveParameters params) {
+    return _useOpticalMapper
+        ? _opticalMapper.map(params)
+        : _mapper.map(params);
   }
 
   FecConfiguration get fecConfiguration => _state.fecConfiguration;
@@ -204,7 +229,7 @@ class AdaptiveSessionController {
     _adaptDiagnostics.recordDecision(decision);
 
     var params = decision.current;
-    var mapped = _mapper.map(params);
+    var mapped = _mapParams(params);
     var throttle = _throttleForTier(params);
     var lighting = _lighting.recommend(env);
 
@@ -245,7 +270,7 @@ class AdaptiveSessionController {
     _adaptDiagnostics.recordDecision(decision);
 
     if (decision.applied) {
-      final mapped = _mapper.map(decision.current);
+      final mapped = _mapParams(decision.current);
       _state = _state.copyWith(
         parameters: decision.current,
         mapped: mapped,
@@ -281,6 +306,8 @@ class AdaptiveSessionController {
       RateTier.max => 120,
     };
   }
+
+  FecConfiguration applyFecAdaptationIfNeeded() => evaluateFecAdaptation();
 
   void reset() {
     _environment.reset();

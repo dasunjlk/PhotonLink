@@ -13,6 +13,9 @@ import '../../services/storage/preferences_service.dart';
 import 'color_matrix_receiver_controller.dart';
 import 'color_matrix_sender_controller.dart';
 import 'color_matrix_transfer_state.dart';
+import 'optical_stream_receiver_controller.dart';
+import 'optical_stream_sender_controller.dart';
+import 'optical_stream_transfer_state.dart';
 import 'receiver_controller.dart';
 import 'sender_controller.dart';
 import 'transfer_state.dart';
@@ -55,6 +58,11 @@ final colorMatrixDiagnosticsCollectorProvider =
   (ref) => FrameDiagnosticsCollector(ref.watch(preferencesServiceProvider)),
 );
 
+final opticalStreamDiagnosticsCollectorProvider =
+    Provider<FrameDiagnosticsCollector>(
+  (ref) => FrameDiagnosticsCollector(ref.watch(preferencesServiceProvider)),
+);
+
 final sessionPersistenceManagerProvider =
     Provider<SessionPersistenceManagerImpl>((ref) {
   return SessionPersistenceManagerImpl(ref.watch(preferencesServiceProvider));
@@ -82,4 +90,16 @@ final colorMatrixSenderControllerProvider =
 final colorMatrixReceiverControllerProvider =
     NotifierProvider<ColorMatrixReceiverController, ColorMatrixReceiverState>(
   ColorMatrixReceiverController.new,
+);
+
+/// Optical Stream continuous sender.
+final opticalStreamSenderControllerProvider =
+    NotifierProvider<OpticalStreamSenderController, OpticalStreamSenderState>(
+  OpticalStreamSenderController.new,
+);
+
+/// Optical Stream camera receiver.
+final opticalStreamReceiverControllerProvider =
+    NotifierProvider<OpticalStreamReceiverController, OpticalStreamReceiverState>(
+  OpticalStreamReceiverController.new,
 );

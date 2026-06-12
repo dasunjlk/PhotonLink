@@ -28,6 +28,7 @@ class PayloadPipeline {
     required CompressionType compression,
     required EncryptionMode encryption,
     required EncryptionKeyProvider keyProvider,
+    bool deferEncryption = false,
   }) async {
     final cs = _compression;
     final es = _encryption;
@@ -48,7 +49,9 @@ class PayloadPipeline {
     }
 
     var encryptionOverhead = 0;
-    if (encryption == EncryptionMode.enabled) {
+    final encryptNow =
+        encryption == EncryptionMode.enabled && !deferEncryption;
+    if (encryptNow) {
       if (!keyProvider.hasKey) {
         throw StateError('Session key required for encryption');
       }
@@ -112,6 +115,44 @@ class PayloadPipeline {
 
     return bytes;
   }
+
+  /// Encrypts already-compressed wire bytes once the session key is available.
+  Future<EncryptedWireResult> encryptWireBytes({
+    required Uint8List compressedBytes,
+    required EncryptionKeyProvider keyProvider,
+  }) async {
+    final es = _encryption;
+    final core = _core;
+    if (es == null || core == null) {
+      throw StateError('PayloadPipeline services not configured');
+    }
+    if (!keyProvider.hasKey) {
+      throw StateError('Session key required for encryption');
+    }
+    final before = compressedBytes.length;
+    final encrypted = await es.encryptIfEnabled(
+      plaintext: compressedBytes,
+      sessionKey: keyProvider.sessionKey,
+      mode: EncryptionMode.enabled,
+    );
+    return EncryptedWireResult(
+      wireBytes: encrypted,
+      wireSha256: core.sha256Hex(encrypted),
+      encryptionOverheadBytes: encrypted.length - before,
+    );
+  }
+}
+
+class EncryptedWireResult {
+  const EncryptedWireResult({
+    required this.wireBytes,
+    required this.wireSha256,
+    required this.encryptionOverheadBytes,
+  });
+
+  final Uint8List wireBytes;
+  final String wireSha256;
+  final int encryptionOverheadBytes;
 }
 
 /// Metadata fields needed for restore (avoids circular import with packet).

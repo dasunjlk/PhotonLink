@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/bootstrap.dart';
 import '../../core/constants.dart';
+import '../../services/core/core_backend.dart';
+import '../../services/core/core_providers.dart';
 import '../../services/native_bridge/native_bridge.dart';
 import '../../shared/components/components.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
@@ -20,6 +22,11 @@ class AboutScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final packageInfo = ref.watch(packageInfoProvider);
     final nativeBridge = ref.watch(nativeBridgeProvider);
+    final backend = ref.watch(backendProvider);
+
+    final coreLabel = backend == CoreBackend.rust
+        ? 'Rust (FRB)'
+        : 'Dart fallback';
 
     return GradientScaffold(
       body: SafeArea(
@@ -47,12 +54,17 @@ class AboutScreen extends ConsumerWidget {
                                   borderRadius: AppRadii.lgRadius,
                                   border: Border.all(color: AppColors.ashDark),
                                 ),
-                                child: const Icon(Icons.bolt_rounded,
-                                    color: AppColors.white, size: 40,),
+                                child: const Icon(
+                                  Icons.bolt_rounded,
+                                  color: AppColors.white,
+                                  size: 40,
+                                ),
                               ),
                               const SizedBox(height: AppSpacing.md),
-                              Text(AppConstants.appName,
-                                  style: theme.textTheme.headlineMedium,),
+                              Text(
+                                AppConstants.appName,
+                                style: theme.textTheme.headlineMedium,
+                              ),
                               const SizedBox(height: AppSpacing.xs),
                               Text(
                                 'Version ${packageInfo.version} (${packageInfo.buildNumber})',
@@ -79,14 +91,16 @@ class AboutScreen extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const PhotonSectionHeader(title: 'Engine Status'),
-                              const PhotonInfoTile(
-                                  label: 'Phase',
-                                  value: AppConstants.phaseLabel,
-                                  dense: true,),
-                              const PhotonInfoTile(
-                                  label: 'Native Core',
-                                  value: 'Stub (Rust not connected)',
-                                  dense: true,),
+                              PhotonInfoTile(
+                                label: 'Phase',
+                                value: AppConstants.phaseLabel,
+                                dense: true,
+                              ),
+                              PhotonInfoTile(
+                                label: 'Native Core',
+                                value: coreLabel,
+                                dense: true,
+                              ),
                               FutureBuilder<String>(
                                 future: nativeBridge.ping(),
                                 builder: (context, snapshot) => PhotonInfoTile(

@@ -33,13 +33,17 @@ class ColorMatrixFrameCodec
 
   /// Embedded in metadata JSON when encryption is enabled (Color Matrix has no setup QR).
   String? encoderKeyExchangePayload;
+  bool _keyExchangeDelivered = false;
 
   /// Populated after decoding a metadata frame that carries a session key.
   String? lastDecodedKeyExchange;
 
   int get maxPayloadBytes => _maxPayloadForGrid(gridSize, bitsPerChannel);
 
-  void resetFrameCounter() => _frameCounter = 0;
+  void resetFrameCounter() {
+    _frameCounter = 0;
+    _keyExchangeDelivered = false;
+  }
 
   @override
   ColorMatrixFrame encodeFrame(TransferPacket packet) {
@@ -54,12 +58,18 @@ class ColorMatrixFrameCodec
         packetType = ColorMatrixPacketType.metadata;
         packetId = 0;
         totalPackets = metadata.totalChunks;
+        final keyPayload = !_keyExchangeDelivered
+            ? encoderKeyExchangePayload
+            : null;
+        if (keyPayload != null) {
+          _keyExchangeDelivered = true;
+        }
         payload = Uint8List.fromList(
           utf8.encode(
             jsonEncode(
               _metadataToJson(
                 metadata,
-                keyExchangePayload: encoderKeyExchangePayload,
+                keyExchangePayload: keyPayload,
               ),
             ),
           ),

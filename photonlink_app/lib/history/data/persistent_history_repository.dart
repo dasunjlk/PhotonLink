@@ -18,7 +18,7 @@ class PersistentHistoryRepository {
     await _migrateFromLegacyIfNeeded();
     final raw = _prefs.getString(_storageKey);
     if (raw == null || raw.isEmpty) {
-      return _defaultSeedIfEmpty();
+      return [];
     }
     try {
       final list = jsonDecode(raw) as List<dynamic>;
@@ -68,6 +68,10 @@ class PersistentHistoryRepository {
     String? profileUsed,
     int? adaptiveEventCount,
     String? environmentSummary,
+    String? fecProfile,
+    int? packetsRecovered,
+    double? recoveryRate,
+    double? parityOverhead,
   }) async {
     final records = await fetchAll();
     final index = records.indexWhere((r) => r.id == id);
@@ -97,6 +101,10 @@ class PersistentHistoryRepository {
       environmentSummary:
           environmentSummary ?? existing.environmentSummary,
       protocolVersion: existing.protocolVersion,
+      fecProfile: fecProfile ?? existing.fecProfile,
+      packetsRecovered: packetsRecovered ?? existing.packetsRecovered,
+      recoveryRate: recoveryRate ?? existing.recoveryRate,
+      parityOverhead: parityOverhead ?? existing.parityOverhead,
     );
     await _saveAll(records);
     return true;
@@ -119,12 +127,6 @@ class PersistentHistoryRepository {
   Future<void> _saveAll(List<TransferRecord> records) async {
     final json = records.map(_recordToJson).toList();
     await _prefs.setString(_storageKey, jsonEncode(json));
-  }
-
-  Future<List<TransferRecord>> _defaultSeedIfEmpty() async {
-    final seeded = _seededRecords;
-    await _saveAll(seeded);
-    return seeded;
   }
 
   static Map<String, dynamic> _recordToJson(TransferRecord r) => {
@@ -197,17 +199,4 @@ class PersistentHistoryRepository {
     );
   }
 
-  static final List<TransferRecord> _seededRecords = [
-    TransferRecord(
-      id: 'seed-1',
-      fileName: 'notes.txt',
-      method: TransferMethod.qr,
-      sizeBytes: 4096,
-      status: TransferStatus.success,
-      timestamp: DateTime.now().subtract(const Duration(days: 1)),
-      direction: TransferDirection.received,
-      sessionId: 'seed-session',
-      protocolVersion: 2,
-    ),
-  ];
 }

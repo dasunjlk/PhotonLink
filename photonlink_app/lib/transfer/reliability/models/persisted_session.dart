@@ -17,6 +17,8 @@ class PersistedSession {
     required this.progress,
     required this.diagnostics,
     this.senderFilePath,
+    this.sessionKeyBase64,
+    this.keyExchangePayload,
     this.updatedAt,
   });
 
@@ -33,6 +35,8 @@ class PersistedSession {
   final double progress;
   final TransferDiagnostics diagnostics;
   final String? senderFilePath;
+  final String? sessionKeyBase64;
+  final String? keyExchangePayload;
   final DateTime? updatedAt;
 
   Map<String, dynamic> toJson() => {
@@ -49,6 +53,8 @@ class PersistedSession {
         'progress': progress,
         'diagnostics': diagnostics.toJson(),
         if (senderFilePath != null) 'senderFilePath': senderFilePath,
+        if (sessionKeyBase64 != null) 'sessionKeyBase64': sessionKeyBase64,
+        if (keyExchangePayload != null) 'keyExchangePayload': keyExchangePayload,
         if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
       };
 
@@ -80,6 +86,8 @@ class PersistedSession {
         json['diagnostics'] as Map<String, dynamic>? ?? {},
       ),
       senderFilePath: json['senderFilePath'] as String?,
+      sessionKeyBase64: json['sessionKeyBase64'] as String?,
+      keyExchangePayload: json['keyExchangePayload'] as String?,
       updatedAt: json['updatedAt'] != null
           ? DateTime.parse(json['updatedAt'] as String)
           : null,
@@ -109,6 +117,8 @@ class PersistedSession {
       progress: progress ?? this.progress,
       diagnostics: diagnostics ?? this.diagnostics,
       senderFilePath: senderFilePath,
+      sessionKeyBase64: sessionKeyBase64,
+      keyExchangePayload: keyExchangePayload,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }

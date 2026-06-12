@@ -1,11 +1,18 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../services/logger/app_logger.dart';
-import '../../services/native_bridge/native_bridge.dart';
-import '../../services/native_bridge/native_bridge_stub.dart';
-import '../../services/storage/preferences_service.dart';
+import '../services/core/core_backend.dart';
+import '../services/core/core_providers.dart';
+import '../services/core/impl/frb_core_api.dart';
+import '../services/core/photon_link_core_api.dart';
+import '../services/logger/app_logger.dart';
+import '../services/native_bridge/native_bridge.dart';
+import '../services/native_bridge/native_bridge_frb.dart';
+import '../services/native_bridge/native_bridge_stub.dart';
+import '../services/storage/preferences_service.dart';
+import '../src/rust/frb_generated.dart' as frb;
 
 /// Result of async application bootstrap.
 class BootstrapResult {
@@ -24,7 +31,25 @@ abstract final class Bootstrap {
     AppLogger.info('PhotonLink bootstrap starting…');
     AppLogger.info('App version: ${packageInfo.version}+${packageInfo.buildNumber}');
 
-    final nativeBridge = NativeBridgeStub();
+    var backend = CoreBackend.dart;
+    PhotonLinkNative nativeBridge = NativeBridgeStub();
+    PhotonLinkCoreApi coreApi = const NotConnectedCoreApi();
+
+    if (!kIsWeb) {
+      try {
+        await frb.PhotonLinkCoreApi.init();
+        backend = CoreBackend.rust;
+        nativeBridge = NativeBridgeFrb();
+        coreApi = const FrbCoreApi();
+        AppLogger.info('Rust core initialized (${await nativeBridge.coreVersion()})');
+      } catch (error, stackTrace) {
+        AppLogger.warning(
+          'Rust core unavailable, falling back to Dart backend: $error',
+        );
+        AppLogger.debug('Rust init stack', error, stackTrace);
+      }
+    }
+
     final pingResult = await nativeBridge.ping();
     AppLogger.info('Native bridge ping: $pingResult');
 
@@ -35,6 +60,8 @@ abstract final class Bootstrap {
         ),
         packageInfoProvider.overrideWithValue(packageInfo),
         nativeBridgeProvider.overrideWithValue(nativeBridge),
+        backendProvider.overrideWithValue(backend),
+        photonLinkCoreApiProvider.overrideWithValue(coreApi),
       ],
     );
   }

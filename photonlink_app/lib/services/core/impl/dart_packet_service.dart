@@ -3,6 +3,8 @@ import 'dart:typed_data';
 import '../../../protocols/interfaces/transfer_packet.dart';
 import '../../../transfer/color_matrix/color_matrix_frame.dart';
 import '../../../transfer/color_matrix/color_matrix_serializer.dart';
+import '../../../transfer/optical_stream/optical_stream_frame.dart';
+import '../../../transfer/optical_stream/optical_stream_serializer.dart';
 import '../../../transfer/qr/qr_frame_codec.dart';
 import '../packet_service.dart';
 import '../photon_link_core_api.dart';
@@ -28,6 +30,14 @@ class DartPacketService implements PacketService {
   @override
   ColorMatrixFrame? deserializePlcmFrame(Uint8List bytes) =>
       ColorMatrixSerializer.deserialize(bytes);
+
+  @override
+  Uint8List serializePlosFrame(OpticalStreamFrame frame) =>
+      OpticalStreamSerializer.serialize(frame);
+
+  @override
+  OpticalStreamFrame? deserializePlosFrame(Uint8List bytes) =>
+      OpticalStreamSerializer.deserialize(bytes);
 }
 
 /// Rust backend for packet codecs.
@@ -79,6 +89,49 @@ class RustPacketService implements PacketService {
         checksum: dto.checksum,
         gridSize: dto.gridSize,
         bitsPerChannel: dto.bitsPerChannel,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Uint8List serializePlosFrame(OpticalStreamFrame frame) {
+    return _api.encodePlosFrame(PlosFrameDto(
+      protocolVersion: frame.protocolVersion,
+      sessionId: frame.sessionId,
+      streamId: frame.streamId,
+      frameId: frame.frameId,
+      packetId: frame.packetId,
+      packetType: frame.packetType.value,
+      totalPackets: frame.totalPackets,
+      syncMarker: frame.syncMarker,
+      timestamp: frame.timestamp,
+      gridSize: frame.gridSize,
+      bitsPerCell: frame.bitsPerCell,
+      payload: frame.payload,
+      checksum: frame.checksum,
+    ));
+  }
+
+  @override
+  OpticalStreamFrame? deserializePlosFrame(Uint8List bytes) {
+    try {
+      final dto = _api.decodePlosFrame(bytes);
+      return OpticalStreamFrame(
+        protocolVersion: dto.protocolVersion,
+        sessionId: dto.sessionId,
+        streamId: dto.streamId,
+        frameId: dto.frameId,
+        packetId: dto.packetId,
+        packetType: OpticalStreamPacketType.fromValue(dto.packetType),
+        totalPackets: dto.totalPackets,
+        payload: dto.payload,
+        checksum: dto.checksum,
+        syncMarker: dto.syncMarker,
+        timestamp: dto.timestamp,
+        gridSize: dto.gridSize,
+        bitsPerCell: dto.bitsPerCell,
       );
     } catch (_) {
       return null;
