@@ -1,15 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../services/storage/preferences_service.dart';
-import '../compression/compression_manager.dart';
+import '../../services/core/core_providers.dart';
 import '../core/chunking_engine.dart';
 import '../core/integrity_verifier.dart';
 import '../core/payload_pipeline.dart';
+import '../core/reconstruction_engine.dart';
 import '../core/session_factory.dart';
 import '../diagnostics/diagnostics_collector.dart';
-import '../encryption/encryption_manager.dart';
 import '../persistence/session_persistence_manager_impl.dart';
 import '../qr/qr_frame_codec.dart';
+import '../../services/storage/preferences_service.dart';
 import 'color_matrix_receiver_controller.dart';
 import 'color_matrix_sender_controller.dart';
 import 'color_matrix_transfer_state.dart';
@@ -25,26 +25,24 @@ final integrityVerifierProvider = Provider<IntegrityVerifier>(
   (ref) => const IntegrityVerifier(),
 );
 
-final compressionManagerProvider = Provider<CompressionManager>(
-  (ref) => CompressionManager(),
-);
-
-final encryptionManagerProvider = Provider<EncryptionManager>(
-  (ref) => EncryptionManager(),
+final reconstructionEngineProvider = Provider<ReconstructionEngine>(
+  (ref) => ReconstructionEngine(
+    chunkingEngine: ref.watch(chunkingEngineProvider),
+  ),
 );
 
 final payloadPipelineProvider = Provider<PayloadPipeline>(
   (ref) => PayloadPipeline(
-    compressionManager: ref.watch(compressionManagerProvider),
-    encryptionManager: ref.watch(encryptionManagerProvider),
-    integrityVerifier: ref.watch(integrityVerifierProvider),
+    compressionService: ref.watch(compressionServiceProvider),
+    encryptionService: ref.watch(encryptionServiceProvider),
+    coreService: ref.watch(coreServiceProvider),
   ),
 );
 
 final sessionFactoryProvider = Provider<SessionFactory>(
   (ref) => SessionFactory(
     chunkManager: ref.watch(chunkingEngineProvider),
-    integrityVerifier: ref.watch(integrityVerifierProvider),
+    coreService: ref.watch(coreServiceProvider),
   ),
 );
 

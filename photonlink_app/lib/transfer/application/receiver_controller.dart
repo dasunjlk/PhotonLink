@@ -12,12 +12,12 @@ import '../../protocols/interfaces/encryption_mode.dart';
 import '../../protocols/interfaces/transfer_packet.dart';
 import '../../protocols/interfaces/transfer_session.dart';
 import '../../protocols/transfer_method.dart';
-import '../core/integrity_verifier.dart';
+import '../../services/core/core_providers.dart';
+import '../../services/core/core_service.dart';
 import '../core/payload_pipeline.dart';
 import '../../settings/application/settings_controller.dart';
 import '../../settings/domain/app_settings.dart';
 import '../core/transfer_limits.dart';
-import '../fec/models/fec_statistics.dart';
 import '../persistence/session_persistence_manager_impl.dart';
 import '../qr/qr_frame_codec.dart';
 import '../qr/qr_stream_controller.dart';
@@ -35,14 +35,17 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
 
   @override
   ReceiverTransferState build() {
-    _ctx = ReliableTransferContext(role: TransferRole.receiver);
+    _ctx = ReliableTransferContext(
+      role: TransferRole.receiver,
+      payloadPipeline: ref.read(payloadPipelineProvider),
+    );
     ref.onDispose(() => _statusStream?.dispose());
     return const ReceiverTransferState();
   }
 
   PayloadPipeline get _pipeline => ref.read(payloadPipelineProvider);
   QrFrameCodec get _codec => ref.read(qrFrameCodecProvider);
-  IntegrityVerifier get _verifier => ref.read(integrityVerifierProvider);
+  CoreService get _core => ref.read(coreServiceProvider);
   SessionPersistenceManagerImpl get _persistence =>
       ref.read(sessionPersistenceManagerProvider);
 
@@ -297,13 +300,13 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
       await _fail('Reconstructed wire size mismatch');
       return;
     }
-    if (!_verifier.verify(rebuilt, metadata.sha256)) {
+    if (!_core.sha256Verify(rebuilt, metadata.sha256)) {
       await _fail('Wire payload SHA-256 check failed');
       return;
     }
 
     try {
-      final plain = await _pipeline.restorePlaintext(
+      final plain = await _pipeline.restore(
         wireBytes: rebuilt,
         meta: MetadataPacketFields(
           compression: metadata.compression,
@@ -321,7 +324,7 @@ class ReceiverController extends Notifier<ReceiverTransferState> {
         await _fail('Plaintext size mismatch after decompress');
         return;
       }
-      if (!_verifier.verify(plain, expectedHash)) {
+      if (!_core.sha256Verify(plain, expectedHash)) {
         await _fail('Original file SHA-256 check failed');
         return;
       }

@@ -3,39 +3,46 @@ import 'dart:typed_data';
 import '../../core/constants.dart';
 import '../../protocols/interfaces/compression_type.dart';
 import '../../protocols/interfaces/encryption_mode.dart';
-import '../compression/compression_manager.dart';
-import '../encryption/encryption_manager.dart';
+import '../../services/core/compression_service.dart';
+import '../../services/core/core_service.dart';
+import '../../services/core/encryption_service.dart';
 import '../security/encryption_key_provider.dart';
-import 'integrity_verifier.dart';
 
 /// Pre-chunk transform: compress → encrypt → hash (transport-agnostic).
 class PayloadPipeline {
   PayloadPipeline({
-    CompressionManager? compressionManager,
-    EncryptionManager? encryptionManager,
-    IntegrityVerifier? integrityVerifier,
-  })  : _compression = compressionManager ?? CompressionManager(),
-        _encryption = encryptionManager ?? EncryptionManager(),
-        _verifier = integrityVerifier ?? const IntegrityVerifier();
+    CompressionService? compressionService,
+    EncryptionService? encryptionService,
+    CoreService? coreService,
+  })  : _compression = compressionService,
+        _encryption = encryptionService,
+        _core = coreService;
 
-  final CompressionManager _compression;
-  final EncryptionManager _encryption;
-  final IntegrityVerifier _verifier;
+  final CompressionService? _compression;
+  final EncryptionService? _encryption;
+  final CoreService? _core;
 
-  /// Result of preparing wire bytes for chunking.
-  Future<PayloadPrepareResult> prepareForSend({
+  /// Convenience wrapper using injected services.
+  Future<PayloadPrepareResult> prepare({
     required Uint8List fileBytes,
     required CompressionType compression,
     required EncryptionMode encryption,
     required EncryptionKeyProvider keyProvider,
   }) async {
-    final originalSha256 = _verifier.compute(fileBytes);
+    final cs = _compression;
+    final es = _encryption;
+    final core = _core;
+    if (cs == null || es == null || core == null) {
+      throw StateError('PayloadPipeline services not configured');
+    }
+
+    final originalSha256 = core.sha256Hex(fileBytes);
     final originalSize = fileBytes.length;
 
     var bytes = fileBytes;
     CompressionType usedCompression = CompressionType.none;
     if (compression != CompressionType.none) {
-      final result = _compression.compress(bytes, compression);
+      final result = cs.compress(bytes, compression);
       bytes = Uint8List.fromList(result.bytes);
       usedCompression = compression;
     }
@@ -46,7 +53,7 @@ class PayloadPipeline {
         throw StateError('Session key required for encryption');
       }
       final before = bytes.length;
-      bytes = await _encryption.encryptIfEnabled(
+      bytes = await es.encryptIfEnabled(
         plaintext: bytes,
         sessionKey: keyProvider.sessionKey,
         mode: encryption,
@@ -54,7 +61,7 @@ class PayloadPipeline {
       encryptionOverhead = bytes.length - before;
     }
 
-    final wireSha256 = _verifier.compute(bytes);
+    final wireSha256 = core.sha256Hex(bytes);
 
     return PayloadPrepareResult(
       wireBytes: bytes,
@@ -64,24 +71,29 @@ class PayloadPipeline {
       compression: usedCompression,
       encryption: encryption,
       encryptionOverheadBytes: encryptionOverhead,
-      compressionRatio:
-          originalSize > 0 ? bytes.length / originalSize : 1.0,
+      compressionRatio: originalSize > 0 ? bytes.length / originalSize : 1.0,
       protocolVersion: AppConstants.protocolVersion,
     );
   }
 
   /// Inverse after reconstruction: decrypt → decompress.
-  Future<Uint8List> restorePlaintext({
+  Future<Uint8List> restore({
     required Uint8List wireBytes,
     required MetadataPacketFields meta,
     required EncryptionKeyProvider keyProvider,
   }) async {
+    final cs = _compression;
+    final es = _encryption;
+    if (cs == null || es == null) {
+      throw StateError('PayloadPipeline services not configured');
+    }
+
     var bytes = wireBytes;
     if (meta.encryption == EncryptionMode.enabled) {
       if (!keyProvider.hasKey) {
         throw StateError('Session key required for decryption');
       }
-      bytes = await _encryption.decryptIfEnabled(
+      bytes = await es.decryptIfEnabled(
         wireBytes: bytes,
         sessionKey: keyProvider.sessionKey,
         mode: meta.encryption,
@@ -90,7 +102,7 @@ class PayloadPipeline {
 
     if (meta.compression != CompressionType.none) {
       final originalSize = meta.originalSize ?? bytes.length;
-      final result = _compression.decompress(
+      final result = cs.decompress(
         bytes,
         type: meta.compression,
         originalSize: originalSize,

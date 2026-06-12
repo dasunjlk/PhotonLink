@@ -1,0 +1,25 @@
+[package]
+name = "photonlink_core"
+version = "0.2.0"
+edition = "2021"
+description = "PhotonLink Rust core engine — performance-critical transfer logic"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+flutter_rust_bridge = "=2.11.1"
+sha2 = "0.10"
+flate2 = "1"
+chacha20poly1305 = { version = "0.10", features = ["std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+zeroize = { version = "1", features = ["derive"] }
+thiserror = "1"
+lz4_flex = "0.11"
+rand = "0.8"
+
+[dev-dependencies]
+hex = "0.4"

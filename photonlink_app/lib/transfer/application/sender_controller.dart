@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -35,7 +34,10 @@ class SenderController extends Notifier<SenderTransferState> {
 
   @override
   SenderTransferState build() {
-    _ctx = ReliableTransferContext(role: TransferRole.sender);
+    _ctx = ReliableTransferContext(
+      role: TransferRole.sender,
+      payloadPipeline: ref.read(payloadPipelineProvider),
+    );
     ref.onDispose(() => _stream?.dispose());
     return const SenderTransferState();
   }
@@ -85,7 +87,7 @@ class SenderController extends Notifier<SenderTransferState> {
         _ctx.keyProvider.setSessionKey(keyResult.sessionKey);
       }
 
-      final prepared = await _pipeline.prepareForSend(
+      final prepared = await _pipeline.prepare(
         fileBytes: bytes,
         compression: compression,
         encryption: encryption,
