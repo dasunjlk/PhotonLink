@@ -231,15 +231,26 @@ abstract final class AppTheme {
       dropdownMenuTheme: DropdownMenuThemeData(
         textStyle: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface),
       ),
+      listTileTheme: ListTileThemeData(
+        iconColor: colorScheme.onSurfaceVariant,
+        textColor: colorScheme.onSurface,
+        titleTextStyle: textTheme.bodyLarge?.copyWith(
+          color: colorScheme.onSurface,
+        ),
+        subtitleTextStyle: textTheme.bodySmall?.copyWith(
+          color: colorScheme.onSurfaceVariant,
+        ),
+        tileColor: Colors.transparent,
+        selectedTileColor: colorScheme.onSurface.withValues(alpha: 0.08),
+      ),
       dividerTheme: DividerThemeData(
         color: border,
         space: 1,
         thickness: 1,
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: isDark
-            ? AppColors.darkSurfaceElevated
-            : AppColors.lightSurface,
+        backgroundColor:
+            isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurface,
         shape: RoundedRectangleBorder(borderRadius: AppRadii.xlRadius),
       ),
       snackBarTheme: SnackBarThemeData(

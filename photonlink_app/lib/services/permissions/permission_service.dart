@@ -1,13 +1,15 @@
-import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/errors/app_exceptions.dart';
+import '../camera/camera_platform.dart';
 import '../logger/app_logger.dart';
 
 /// Handles runtime permission requests for camera and storage.
 class PermissionService {
-  /// Requests camera permission. Returns true if granted.
+  /// Requests camera permission. Returns true if granted or not required.
   Future<bool> requestCamera() async {
+    if (!usesRuntimeCameraPermission()) return true;
+
     final status = await Permission.camera.request();
     AppLogger.info('Camera permission: $status');
     return status.isGranted;
@@ -23,17 +25,29 @@ class PermissionService {
     return storage.isGranted;
   }
 
-  /// Ensures camera permission is granted, throws if denied.
+  /// Ensures camera permission is granted on platforms that use
+  /// [permission_handler]. Web and desktop Windows/Linux rely on the camera
+  /// plugin to prompt when hardware is opened.
   Future<void> ensureCamera() async {
-    // Web browsers prompt via getUserMedia when the camera plugin initializes.
-    if (kIsWeb) return;
+    if (!usesRuntimeCameraPermission()) return;
 
-    final granted = await requestCamera();
-    if (!granted) {
+    var status = await Permission.camera.status;
+    if (status.isGranted) return;
+
+    status = await Permission.camera.request();
+    AppLogger.info('Camera permission: $status');
+
+    if (status.isGranted) return;
+
+    if (status.isPermanentlyDenied) {
       throw const PermissionDeniedException(
-        'Camera permission is required for optical scanning.',
+        'Camera permission was denied. Open Settings to allow camera access.',
       );
     }
+
+    throw const PermissionDeniedException(
+      'Camera permission is required for optical scanning.',
+    );
   }
 
   /// Opens the system app settings page.

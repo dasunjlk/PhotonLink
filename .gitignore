@@ -18,6 +18,7 @@ photonlink_app/**/local.properties
 
 # Rust
 native/photonlink_core/target/
+photonlink_core/target/
 
 # Cursor
 .cursor/

@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 
 import '../../core/errors/app_exceptions.dart';
 import '../../protocols/transfer_method.dart';
+import '../../services/camera/camera_error_messages.dart';
+import '../../services/camera/camera_platform.dart';
 import '../../services/permissions/permission_service.dart';
-import '../../shared/components/components.dart';
+import '../../shared/widgets/camera_error_panel.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
 import '../../shared/widgets/inner_screen_header.dart';
 import '../../shared/widgets/scan_frame_overlay.dart';
@@ -42,7 +44,8 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
         throw const CameraUnavailableException(
-            'No cameras found on this device.',);
+          'No cameras found on this device.',
+        );
       }
 
       final camera = cameras.firstWhere(
@@ -50,10 +53,9 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
         orElse: () => cameras.first,
       );
 
-      final controller = CameraController(
+      final controller = createColorMatrixCameraController(
         camera,
         ResolutionPreset.high,
-        enableAudio: false,
       );
 
       await controller.initialize();
@@ -74,7 +76,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
       });
     } catch (e) {
       setState(() {
-        _errorMessage = 'Failed to initialize camera: $e';
+        _errorMessage = describeCameraFailure(e);
         _isInitializing = false;
       });
     }
@@ -94,7 +96,8 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
             ? Column(
                 children: [
                   InnerScreenHeader(
-                      title: 'Scan · ${widget.method.displayName}',),
+                    title: 'Scan · ${widget.method.displayName}',
+                  ),
                   Expanded(child: _buildBody()),
                 ],
               )
@@ -103,7 +106,8 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
                 children: [
                   _buildBody(),
                   InnerScreenHeader(
-                      title: 'Scan · ${widget.method.displayName}',),
+                    title: 'Scan · ${widget.method.displayName}',
+                  ),
                 ],
               ),
       ),
@@ -125,7 +129,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
     }
 
     if (_errorMessage != null) {
-      return _ErrorView(
+      return CameraErrorPanel(
         message: _errorMessage!,
         onRetry: () {
           setState(() {
@@ -163,58 +167,6 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({
-    required this.message,
-    required this.onRetry,
-    required this.onOpenSettings,
-  });
-
-  final String message;
-  final VoidCallback onRetry;
-  final Future<bool> Function() onOpenSettings;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.no_photography_rounded,
-                size: 64,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              PhotonButton(
-                label: 'Retry',
-                icon: Icons.refresh_rounded,
-                onPressed: onRetry,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              PhotonButton(
-                label: 'Open Settings',
-                variant: PhotonButtonVariant.ghost,
-                onPressed: onOpenSettings,
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

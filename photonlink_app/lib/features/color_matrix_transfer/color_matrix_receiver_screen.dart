@@ -15,7 +15,11 @@ import '../../protocols/transfer_method.dart';
 
 import '../../settings/domain/app_settings.dart';
 
+import '../../core/errors/app_exceptions.dart';
+import '../../services/camera/camera_error_messages.dart';
+import '../../services/camera/camera_platform.dart';
 import '../../services/permissions/permission_service.dart';
+import '../../shared/widgets/camera_error_panel.dart';
 
 import '../../settings/application/settings_controller.dart';
 
@@ -35,15 +39,13 @@ import '../../shared/widgets/transfer_stage_layout.dart';
 
 import '../../transfer/adaptive/brightness_sampler.dart';
 
+import '../../transfer/application/color_matrix_receiver_controller.dart';
 import '../../transfer/application/color_matrix_transfer_state.dart';
-
 import '../../transfer/application/transfer_providers.dart';
 
 import '../../transfer/color_matrix/color_frame_detector.dart';
 
 import '../../transfer/color_matrix/color_matrix_frame.dart';
-
-import '../../ui/spacing.dart';
 
 /// Color Matrix receiver with live camera frame analysis.
 
@@ -69,7 +71,11 @@ class _ColorMatrixReceiverScreenState
 
   bool _checkingPermission = true;
 
-  String? _initError;
+  String? _permissionError;
+
+  String? _cameraError;
+
+  String? _streamWarning;
 
   bool _streamActive = false;
 
@@ -79,9 +85,17 @@ class _ColorMatrixReceiverScreenState
 
   final _detector = const ColorFrameDetector();
 
+  ColorMatrixReceiverController? _receiverNotifier;
+
   @override
   void initState() {
     super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _receiverNotifier =
+          ref.read(colorMatrixReceiverControllerProvider.notifier);
+    });
 
     _initPermission();
   }
@@ -89,7 +103,9 @@ class _ColorMatrixReceiverScreenState
   Future<void> _initPermission() async {
     setState(() {
       _checkingPermission = true;
-      _initError = null;
+      _permissionError = null;
+      _cameraError = null;
+      _streamWarning = null;
     });
 
     try {
@@ -102,12 +118,20 @@ class _ColorMatrixReceiverScreenState
       });
 
       await _initCamera();
+    } on PermissionDeniedException catch (e) {
+      if (mounted) {
+        setState(() {
+          _permissionGranted = false;
+          _checkingPermission = false;
+          _permissionError = e.message;
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
           _permissionGranted = false;
           _checkingPermission = false;
-          _initError = e.toString();
+          _permissionError = describeCameraFailure(e);
         });
       }
     }
@@ -134,14 +158,7 @@ class _ColorMatrixReceiverScreenState
           ? ResolutionPreset.high
           : ResolutionPreset.medium;
 
-      final controller = kIsWeb
-          ? CameraController(camera, preset, enableAudio: false)
-          : CameraController(
-              camera,
-              preset,
-              enableAudio: false,
-              imageFormatGroup: ImageFormatGroup.yuv420,
-            );
+      final controller = createColorMatrixCameraController(camera, preset);
 
       await controller.initialize();
       if (!mounted) {
@@ -164,7 +181,7 @@ class _ColorMatrixReceiverScreenState
       } catch (e) {
         streamWarning = kIsWeb
             ? 'Live frame analysis is limited on web. Use the Android or desktop app for full Color Matrix receive.'
-            : 'Could not start camera frame stream: $e';
+            : describeCameraFailure(e);
       }
 
       if (!mounted) {
@@ -175,13 +192,13 @@ class _ColorMatrixReceiverScreenState
       setState(() {
         _cameraController = controller;
         _streamActive = streamActive;
-        _initError = streamWarning;
+        _streamWarning = streamWarning;
+        _cameraError = null;
       });
     } catch (e) {
       if (mounted) {
         setState(() {
-          _permissionGranted = false;
-          _initError = e.toString();
+          _cameraError = describeCameraFailure(e);
         });
       }
     }
@@ -218,7 +235,7 @@ class _ColorMatrixReceiverScreenState
         variance: brightness.variance,
       );
 
-      final rgb = _yuvToRgb(image);
+      final rgb = cameraImageToRgb(image);
 
       final gridSize = receiverState.gridSize;
 
@@ -275,53 +292,9 @@ class _ColorMatrixReceiverScreenState
     }
   }
 
-  _RgbBuffer _yuvToRgb(CameraImage image) {
-    final width = image.width;
-
-    final height = image.height;
-
-    final yPlane = image.planes[0].bytes;
-
-    final uPlane = image.planes.length > 1 ? image.planes[1].bytes : yPlane;
-
-    final vPlane = image.planes.length > 2 ? image.planes[2].bytes : yPlane;
-
-    final rgb = Uint8List(width * height * 3);
-
-    var idx = 0;
-
-    for (var y = 0; y < height; y++) {
-      for (var x = 0; x < width; x++) {
-        final yIndex = y * image.planes[0].bytesPerRow + x;
-
-        final uvIndex = (y ~/ 2) * image.planes[1].bytesPerRow + (x ~/ 2) * 2;
-
-        final yVal = yPlane[yIndex];
-
-        final uVal = uPlane[uvIndex];
-
-        final vVal = vPlane[uvIndex.clamp(0, vPlane.length - 1)];
-
-        var r = yVal + 1.402 * (vVal - 128);
-
-        var g = yVal - 0.344136 * (uVal - 128) - 0.714136 * (vVal - 128);
-
-        var b = yVal + 1.772 * (uVal - 128);
-
-        rgb[idx++] = r.round().clamp(0, 255);
-
-        rgb[idx++] = g.round().clamp(0, 255);
-
-        rgb[idx++] = b.round().clamp(0, 255);
-      }
-    }
-
-    return _RgbBuffer(rgb, width, height);
-  }
-
   @override
   void dispose() {
-    ref.read(colorMatrixReceiverControllerProvider.notifier).reset();
+    _receiverNotifier?.reset();
 
     if (_streamActive) {
       _cameraController?.stopImageStream();
@@ -372,10 +345,32 @@ class _ColorMatrixReceiverScreenState
             children: [
               const InnerScreenHeader(title: 'Color Matrix · Receive'),
               Expanded(
-                child: _PermissionDenied(
-                  message: _initError ??
+                child: CameraErrorPanel(
+                  message: _permissionError ??
                       'Camera permission is required for Color Matrix scanning.',
                   onRetry: _initPermission,
+                  onOpenSettings: _permissionService.openSettings,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_cameraError != null &&
+        (_cameraController == null ||
+            !_cameraController!.value.isInitialized)) {
+      return GradientScaffold(
+        body: SafeArea(
+          child: Column(
+            children: [
+              const InnerScreenHeader(title: 'Color Matrix · Receive'),
+              Expanded(
+                child: CameraErrorPanel(
+                  message: _cameraError!,
+                  onRetry: _initPermission,
+                  onOpenSettings: _permissionService.openSettings,
                 ),
               ),
             ],
@@ -397,7 +392,7 @@ class _ColorMatrixReceiverScreenState
                   accent,
                   settings,
                   showQuality,
-                  cameraWarning: _initError,
+                  cameraWarning: _streamWarning,
                 ),
               ),
             ),
@@ -530,52 +525,4 @@ class _CameraPane extends StatelessWidget {
       },
     );
   }
-}
-
-class _PermissionDenied extends StatelessWidget {
-  const _PermissionDenied({
-    required this.message,
-    required this.onRetry,
-  });
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.no_photography_rounded, size: 64),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            PhotonButton(
-              label: 'Retry',
-              icon: Icons.refresh_rounded,
-              expand: false,
-              onPressed: onRetry,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _RgbBuffer {
-  const _RgbBuffer(this.bytes, this.width, this.height);
-
-  final Uint8List bytes;
-
-  final int width;
-
-  final int height;
 }

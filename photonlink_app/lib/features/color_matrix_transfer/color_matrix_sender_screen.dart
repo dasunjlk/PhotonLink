@@ -12,6 +12,7 @@ import '../../shared/widgets/inner_screen_header.dart';
 import '../../shared/widgets/transfer_info_panel.dart';
 import '../../shared/widgets/transfer_presentation.dart';
 import '../../shared/widgets/transfer_stage_layout.dart';
+import '../../transfer/application/color_matrix_sender_controller.dart';
 import '../../transfer/application/color_matrix_transfer_state.dart';
 import '../../transfer/application/transfer_providers.dart';
 import '../../ui/spacing.dart';
@@ -93,9 +94,20 @@ class _ColorMatrixSenderScreenState
     await notifier.startTransmission();
   }
 
+  ColorMatrixSenderController? _senderNotifier;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _senderNotifier = ref.read(colorMatrixSenderControllerProvider.notifier);
+    });
+  }
+
   @override
   void dispose() {
-    ref.read(colorMatrixSenderControllerProvider.notifier).reset();
+    _senderNotifier?.reset();
     super.dispose();
   }
 
