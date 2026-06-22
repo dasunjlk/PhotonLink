@@ -1,47 +1,27 @@
 import 'package:file_picker/file_picker.dart';
-
 import 'package:flutter/material.dart';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:mobile_scanner/mobile_scanner.dart';
-
-import '../../protocols/interfaces/compression_type.dart';
-
-import '../../protocols/interfaces/encryption_mode.dart';
-
-import '../../protocols/transfer_method.dart';
-
-import '../../shared/components/components.dart';
-
-import '../../shared/platform_file_utils.dart';
-
 import '../../core/errors/app_exceptions.dart';
+import '../../protocols/interfaces/compression_type.dart';
+import '../../protocols/interfaces/encryption_mode.dart';
+import '../../protocols/transfer_method.dart';
 import '../../services/camera/camera_error_messages.dart';
 import '../../services/camera/camera_platform.dart';
 import '../../services/permissions/permission_service.dart';
+import '../../shared/components/components.dart';
+import '../../shared/platform_file_utils.dart';
 import '../../shared/widgets/camera_error_panel.dart';
-
 import '../../shared/widgets/gradient_scaffold.dart';
-
 import '../../shared/widgets/inner_screen_header.dart';
-
-import '../../shared/widgets/scan_frame_overlay.dart';
-
+import '../../shared/widgets/photon_qr_scanner_view.dart';
 import '../../shared/widgets/transfer_info_panel.dart';
-
 import '../../shared/widgets/transfer_presentation.dart';
-
 import '../../shared/widgets/transfer_stage_layout.dart';
-
 import '../../transfer/application/sender_controller.dart';
-
 import '../../transfer/application/transfer_providers.dart';
-
 import '../../transfer/application/transfer_state.dart';
-
 import '../../ui/spacing.dart';
-
 import 'widgets/qr_frame_display.dart';
 
 /// Bidirectional QR sender: display + scan for ACK/NAK/handshake.
@@ -54,11 +34,6 @@ class QrSenderScreen extends ConsumerStatefulWidget {
 }
 
 class _QrSenderScreenState extends ConsumerState<QrSenderScreen> {
-  final _scanner = MobileScannerController(
-    detectionSpeed: DetectionSpeed.noDuplicates,
-    facing: CameraFacing.back,
-  );
-
   final _permission = PermissionService();
 
   bool _cameraOk = false;
@@ -72,24 +47,12 @@ class _QrSenderScreenState extends ConsumerState<QrSenderScreen> {
   @override
   void initState() {
     super.initState();
-
-    _scanner.addListener(_onScannerStateChanged);
     _initCamera();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _senderNotifier = ref.read(senderControllerProvider.notifier);
       _senderNotifier!.checkResumableSession();
-    });
-  }
-
-  void _onScannerStateChanged() {
-    final error = _scanner.value.error;
-    if (error == null || !mounted) return;
-
-    setState(() {
-      _cameraOk = false;
-      _cameraError = describeMobileScannerFailure(error);
     });
   }
 
@@ -105,14 +68,16 @@ class _QrSenderScreenState extends ConsumerState<QrSenderScreen> {
           _cameraOk = false;
           _checkingCamera = false;
           _cameraError =
-              'QR camera scanning is not supported on Windows or Linux. Use the web or mobile app.';
+              'QR camera scanning is not supported on this platform.';
         });
       }
       return;
     }
 
     try {
-      await _permission.ensureCamera();
+      if (isMobileScannerQrSupported()) {
+        await _permission.ensureCamera();
+      }
 
       if (mounted) {
         setState(() {
@@ -141,9 +106,7 @@ class _QrSenderScreenState extends ConsumerState<QrSenderScreen> {
 
   @override
   void dispose() {
-    _scanner.removeListener(_onScannerStateChanged);
     _senderNotifier?.reset();
-    _scanner.dispose();
     super.dispose();
   }
 
@@ -207,15 +170,14 @@ class _QrSenderScreenState extends ConsumerState<QrSenderScreen> {
         checkingCamera: _checkingCamera,
         cameraError: _cameraError,
         frameData: state.currentFrameData,
-        scanner: _scanner,
         scanLabel: 'Scan receiver NAK/ACK QR',
         onDetect: notifier.onFrameScanned,
         onRetryCamera: _initCamera,
-        onScannerError: (error) {
+        onScannerError: (message) {
           if (!mounted) return;
           setState(() {
             _cameraOk = false;
-            _cameraError = describeMobileScannerFailure(error);
+            _cameraError = message;
           });
         },
       ),
@@ -402,7 +364,6 @@ class _DisplayPane extends StatelessWidget {
     required this.checkingCamera,
     required this.cameraError,
     required this.frameData,
-    required this.scanner,
     required this.scanLabel,
     required this.onDetect,
     required this.onRetryCamera,
@@ -415,11 +376,10 @@ class _DisplayPane extends StatelessWidget {
   final bool checkingCamera;
   final String? cameraError;
   final String? frameData;
-  final MobileScannerController scanner;
   final String scanLabel;
   final ValueChanged<String> onDetect;
   final VoidCallback onRetryCamera;
-  final ValueChanged<MobileScannerException> onScannerError;
+  final ValueChanged<String> onScannerError;
 
   @override
   Widget build(BuildContext context) {
@@ -434,11 +394,11 @@ class _DisplayPane extends StatelessWidget {
           Expanded(
             flex: 2,
             child: cameraOk
-                ? _ScanPane(
-                    scanner: scanner,
+                ? PhotonQrScannerView(
                     scanLabel: scanLabel,
+                    frameSizeFactor: 0.65,
                     onDetect: onDetect,
-                    onScannerError: onScannerError,
+                    onError: onScannerError,
                   )
                 : CameraErrorPanel(
                     message: cameraError ??
@@ -465,62 +425,14 @@ class _DisplayPane extends StatelessWidget {
           onRetry: onRetryCamera,
         );
       }
-      return _ScanPane(
-        scanner: scanner,
+      return PhotonQrScannerView(
         scanLabel: scanLabel,
         onDetect: onDetect,
-        onScannerError: onScannerError,
+        onError: onScannerError,
       );
     }
 
     return const Center(child: CircularProgressIndicator());
-  }
-}
-
-class _ScanPane extends StatelessWidget {
-  const _ScanPane({
-    required this.scanner,
-    required this.scanLabel,
-    required this.onDetect,
-    required this.onScannerError,
-  });
-
-  final MobileScannerController scanner;
-  final String scanLabel;
-  final ValueChanged<String> onDetect;
-  final ValueChanged<MobileScannerException> onScannerError;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            MobileScanner(
-              controller: scanner,
-              errorBuilder: (context, error) {
-                onScannerError(error);
-                return CameraErrorPanel(
-                  message: describeMobileScannerFailure(error),
-                  onRetry: () => scanner.start(),
-                );
-              },
-              onDetect: (cap) {
-                for (final b in cap.barcodes) {
-                  final v = b.rawValue;
-                  if (v != null) onDetect(v);
-                }
-              },
-            ),
-            ScanFrameOverlay(
-              frameSize: constraints.biggest.shortestSide * 0.65,
-              label: scanLabel,
-            ),
-          ],
-        );
-      },
-    );
   }
 }
 

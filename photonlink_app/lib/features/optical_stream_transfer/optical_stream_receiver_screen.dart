@@ -10,7 +10,9 @@ import '../../core/errors/app_exceptions.dart';
 import '../../core/router/app_router.dart';
 import '../../protocols/transfer_method.dart';
 import '../../services/camera/camera_error_messages.dart';
+import '../../services/camera/camera_frame_poller.dart';
 import '../../services/camera/camera_platform.dart';
+import '../../services/camera/camera_session.dart';
 import '../../services/permissions/permission_service.dart';
 import '../../settings/application/settings_controller.dart';
 import '../../shared/components/components.dart';
@@ -56,6 +58,7 @@ class _OpticalStreamReceiverScreenState
   DateTime _lastProcess = DateTime.fromMillisecondsSinceEpoch(0);
   final _detector = const OpticalDetector();
   OpticalStreamReceiverController? _receiverNotifier;
+  CameraFramePoller? _framePoller;
 
   @override
   void initState() {
@@ -94,9 +97,9 @@ class _OpticalStreamReceiverScreenState
     } catch (e) {
       if (mounted) {
         setState(() {
-          _permissionGranted = false;
+          _permissionGranted = true;
           _checkingPermission = false;
-          _permissionError = describeCameraFailure(e);
+          _cameraError = describeCameraFailure(e);
         });
       }
     }
@@ -105,19 +108,13 @@ class _OpticalStreamReceiverScreenState
   Future<void> _initCamera() async {
     final settings = ref.read(settingsProvider);
     try {
-      final cameras = await availableCameras();
-      if (cameras.isEmpty) {
-        throw CameraException('noCamera', 'No camera found on this device.');
-      }
-      final camera = cameras.firstWhere(
-        (c) => c.lensDirection == CameraLensDirection.back,
-        orElse: () => cameras.first,
-      );
       final preset = settings.cameraResolution == 'high'
           ? ResolutionPreset.high
           : ResolutionPreset.medium;
-      final controller = createColorMatrixCameraController(camera, preset);
-      await controller.initialize();
+      final controller = await openPreferredCamera(
+        preset: preset,
+        permissionService: _permissionService,
+      );
       if (!mounted) {
         await controller.dispose();
         return;
@@ -128,24 +125,13 @@ class _OpticalStreamReceiverScreenState
             cameraWidth: controller.value.previewSize?.height.toInt() ?? 0,
             cameraHeight: controller.value.previewSize?.width.toInt() ?? 0,
           );
-      var streamActive = false;
-      String? streamWarning;
-      try {
-        await controller.startImageStream(_onImageStream);
-        streamActive = true;
-      } catch (e) {
-        streamWarning = kIsWeb
-            ? 'Live stream analysis is limited on web.'
-            : describeCameraFailure(e);
-      }
+      await _startFrameAnalysis(controller);
       if (!mounted) {
         await controller.dispose();
         return;
       }
       setState(() {
         _cameraController = controller;
-        _streamActive = streamActive;
-        _streamWarning = streamWarning;
         _cameraError = null;
       });
     } catch (e) {
@@ -154,6 +140,127 @@ class _OpticalStreamReceiverScreenState
           _cameraError = describeCameraFailure(e);
         });
       }
+    }
+  }
+
+  Future<void> _startFrameAnalysis(CameraController controller) async {
+    final throttleMs = ref
+        .read(opticalStreamReceiverControllerProvider.notifier)
+        .processingThrottleMs;
+
+    if (supportsCameraImageStream()) {
+      try {
+        await controller.startImageStream(_onImageStream);
+        if (mounted) {
+          setState(() {
+            _streamActive = true;
+            _streamWarning = null;
+          });
+        }
+        return;
+      } catch (e) {
+        if (!usesCameraCapturePolling()) {
+          rethrow;
+        }
+      }
+    }
+
+    _framePoller = CameraFramePoller(
+      controller: controller,
+      intervalMs: throttleMs,
+      onFrame: ({required bytes, required width, required height}) {
+        unawaited(_processRgbFrame(bytes, width, height));
+      },
+    );
+    _framePoller!.start();
+
+    if (mounted) {
+      setState(() {
+        _streamActive = false;
+        _streamWarning = usesCameraCapturePolling()
+            ? 'Using capture mode on this platform (slower than live stream).'
+            : 'Live stream analysis is limited on web.';
+      });
+    }
+  }
+
+  Future<void> _processRgbFrame(
+    Uint8List rgbBytes,
+    int width,
+    int height,
+  ) async {
+    if (_isProcessing) return;
+    final notifier = ref.read(opticalStreamReceiverControllerProvider.notifier);
+    final receiverState = ref.read(opticalStreamReceiverControllerProvider);
+    if (receiverState.phase == TransferPhase.completed ||
+        receiverState.phase == TransferPhase.failed ||
+        receiverState.phase == TransferPhase.reconstructing) {
+      return;
+    }
+    final throttleMs = notifier.processingThrottleMs;
+    final now = DateTime.now();
+    if (now.difference(_lastProcess).inMilliseconds < throttleMs) return;
+    _lastProcess = now;
+    _isProcessing = true;
+    try {
+      final brightness = _brightnessSampler.sampleFromRgb(rgbBytes);
+      notifier.recordBrightnessSample(
+        brightness.avg,
+        variance: brightness.variance,
+      );
+      final gridSize = receiverState.gridSize;
+      final detection = _detector.detectFromRgb(
+        rgbBytes: rgbBytes,
+        width: width,
+        height: height,
+        gridSize: gridSize,
+      );
+      if (!detection.detected || detection.cells.isEmpty) {
+        notifier.onOpticalStreamFrame(
+          OpticalStreamFrame(
+            protocolVersion: OpticalStreamFrame.currentProtocolVersion,
+            sessionId: '',
+            streamId: 0,
+            frameId: 0,
+            packetId: 0,
+            packetType: OpticalStreamPacketType.data,
+            totalPackets: 0,
+            payload: Uint8List(0),
+            checksum: 0,
+            syncMarker: 0,
+            timestamp: 0,
+            gridSize: gridSize,
+            cells: const [],
+          ),
+          detectionAccuracy: 0,
+          detected: false,
+        );
+        return;
+      }
+      final frame = OpticalStreamFrame(
+        protocolVersion: OpticalStreamFrame.currentProtocolVersion,
+        sessionId: '',
+        streamId: 0,
+        frameId: 0,
+        packetId: 0,
+        packetType: OpticalStreamPacketType.data,
+        totalPackets: 0,
+        payload: Uint8List(0),
+        checksum: 0,
+        syncMarker: 0,
+        timestamp: 0,
+        gridSize: detection.gridSize,
+        cells: detection.cells,
+      );
+      notifier.onOpticalStreamFrame(
+        frame,
+        detectionAccuracy: detection.accuracy,
+        detected: true,
+      );
+    } catch (_) {
+      // Skip bad frames
+    } finally {
+      _isProcessing = false;
     }
   }
 
@@ -237,6 +344,7 @@ class _OpticalStreamReceiverScreenState
   @override
   void dispose() {
     _receiverNotifier?.reset();
+    _framePoller?.stop();
     if (_streamActive) {
       _cameraController?.stopImageStream();
     }
@@ -254,10 +362,12 @@ class _OpticalStreamReceiverScreenState
       (prev, next) {
         if (prev?.phase != TransferPhase.completed &&
             next.phase == TransferPhase.completed) {
+          _framePoller?.stop();
           if (_streamActive) _cameraController?.stopImageStream();
           context.push(AppRoutes.opticalStreamComplete, extra: next);
         } else if (prev?.phase != TransferPhase.failed &&
             next.phase == TransferPhase.failed) {
+          _framePoller?.stop();
           if (_streamActive) _cameraController?.stopImageStream();
           context.push(AppRoutes.opticalStreamComplete, extra: next);
         }
@@ -327,7 +437,7 @@ class _OpticalStreamReceiverScreenState
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: CameraPreview(preview),
+                      child: buildCameraPreview(preview),
                     ),
                     const ScanFrameOverlay(),
                   ],

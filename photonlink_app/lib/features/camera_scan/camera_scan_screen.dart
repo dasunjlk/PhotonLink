@@ -5,6 +5,7 @@ import '../../core/errors/app_exceptions.dart';
 import '../../protocols/transfer_method.dart';
 import '../../services/camera/camera_error_messages.dart';
 import '../../services/camera/camera_platform.dart';
+import '../../services/camera/camera_session.dart';
 import '../../services/permissions/permission_service.dart';
 import '../../shared/widgets/camera_error_panel.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
@@ -40,25 +41,10 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
 
   Future<void> _initCamera() async {
     try {
-      await _permissionService.ensureCamera();
-      final cameras = await availableCameras();
-      if (cameras.isEmpty) {
-        throw const CameraUnavailableException(
-          'No cameras found on this device.',
-        );
-      }
-
-      final camera = cameras.firstWhere(
-        (c) => c.lensDirection == CameraLensDirection.back,
-        orElse: () => cameras.first,
+      final controller = await openPreferredCamera(
+        preset: ResolutionPreset.high,
+        permissionService: _permissionService,
       );
-
-      final controller = createColorMatrixCameraController(
-        camera,
-        ResolutionPreset.high,
-      );
-
-      await controller.initialize();
 
       if (!mounted) {
         await controller.dispose();
@@ -150,7 +136,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        CameraPreview(controller),
+        buildCameraPreview(controller),
         ScanFrameOverlay(
           label: 'Align ${widget.method.displayName} signal within frame',
         ),
