@@ -1,8 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../services/core/core_providers.dart';
 import '../settings/application/settings_controller.dart';
+import '../transfer/optical_stream/optical_stream_codec.dart';
 import '../transfer/color_matrix/color_matrix_frame.dart';
 import '../transfer/color_matrix/color_matrix_transport.dart';
+import '../transfer/optical_stream/optical_stream_frame.dart';
+import '../transfer/optical_stream/optical_stream_transport.dart';
 import '../transfer/qr/qr_transport.dart';
 import 'interfaces/transport.dart';
 import 'transfer_method.dart';
@@ -54,6 +58,18 @@ final transportRegistryProvider = Provider<TransportRegistry>((ref) {
         bitsPerChannel: settings.colorBitsPerChannel,
       ),
     ),
+    TransferMethod.opticalStream: TransportEntry(
+      method: TransferMethod.opticalStream,
+      transport: OpticalStreamTransport(
+        gridSize: settings.opticalStreamDensity,
+        bitsPerCell: 3,
+        codec: OpticalStreamFrameCodec(
+          gridSize: settings.opticalStreamDensity,
+          bitsPerCell: 3,
+          packetService: ref.watch(packetServiceProvider),
+        ),
+      ),
+    ),
   });
 });
 
@@ -62,4 +78,11 @@ final colorMatrixTransportProvider = Provider<ColorMatrixTransport>((ref) {
   return ref.watch(transportRegistryProvider).transportFor<ColorMatrixFrame>(
         TransferMethod.colorMatrix,
       ) as ColorMatrixTransport;
+});
+
+/// Convenience accessor for Optical Stream transport.
+final opticalStreamTransportProvider = Provider<OpticalStreamTransport>((ref) {
+  return ref.watch(transportRegistryProvider).transportFor<OpticalStreamFrame>(
+        TransferMethod.opticalStream,
+      ) as OpticalStreamTransport;
 });

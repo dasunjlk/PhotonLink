@@ -26,8 +26,7 @@ class PermissionService {
   }
 
   /// Ensures camera permission is granted on platforms that use
-  /// [permission_handler]. Web and desktop Windows/Linux rely on the camera
-  /// plugin to prompt when hardware is opened.
+  /// [permission_handler]. Linux relies on the camera plugin when hardware opens.
   Future<void> ensureCamera() async {
     if (!usesRuntimeCameraPermission()) return;
 

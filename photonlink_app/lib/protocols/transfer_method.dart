@@ -23,11 +23,10 @@ enum TransferMethod {
   opticalStream(
     id: 'optical_stream',
     displayName: 'Optical Stream',
-    description: 'Continuous visual frame streaming',
+    description: 'Continuous high-speed optical frame streaming',
     icon: Icons.videocam_rounded,
-    accentColor: AppColors.ash,
-    isAvailable: false,
-    isPreview: true,
+    accentColor: AppColors.ashLight,
+    isAvailable: true,
   ),
   audio(
     id: 'audio',

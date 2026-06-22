@@ -1,5 +1,7 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:image/image.dart' as img;
 
 /// Whether [permission_handler] should gate camera access before opening hardware.
 bool usesRuntimeCameraPermission() {
@@ -7,14 +9,15 @@ bool usesRuntimeCameraPermission() {
   return switch (defaultTargetPlatform) {
     TargetPlatform.android ||
     TargetPlatform.iOS ||
-    TargetPlatform.macOS =>
+    TargetPlatform.macOS ||
+    TargetPlatform.windows =>
       true,
     _ => false,
   };
 }
 
 /// Whether [MobileScanner] can open a live camera preview on this platform.
-bool isQrCameraScanSupported() {
+bool isMobileScannerQrSupported() {
   if (kIsWeb) return true;
   return switch (defaultTargetPlatform) {
     TargetPlatform.android ||
@@ -24,6 +27,32 @@ bool isQrCameraScanSupported() {
     _ => false,
   };
 }
+
+/// Whether QR scanning is available via any supported backend.
+bool isQrCameraScanSupported() =>
+    isMobileScannerQrSupported() || usesDesktopQrScanner();
+
+/// Windows/Linux desktop QR uses [CameraController] + ZXing instead of
+/// [MobileScanner].
+bool usesDesktopQrScanner() {
+  if (kIsWeb) return false;
+  return switch (defaultTargetPlatform) {
+    TargetPlatform.windows || TargetPlatform.linux => true,
+    _ => false,
+  };
+}
+
+/// Whether [CameraController.startImageStream] is expected to work.
+bool supportsCameraImageStream() {
+  if (kIsWeb) return false;
+  return switch (defaultTargetPlatform) {
+    TargetPlatform.windows => false,
+    _ => true,
+  };
+}
+
+/// Whether frame analysis should fall back to periodic [takePicture] captures.
+bool usesCameraCapturePolling() => !supportsCameraImageStream() && !kIsWeb;
 
 /// Creates a [CameraController] tuned for Color Matrix frame analysis.
 CameraController createColorMatrixCameraController(
@@ -114,4 +143,36 @@ CameraController createColorMatrixCameraController(
   }
 
   return (bytes: rgb, width: width, height: height);
+}
+
+/// Converts a decoded still image to interleaved RGB bytes.
+({Uint8List bytes, int width, int height}) decodedImageToRgb(img.Image image) {
+  final width = image.width;
+  final height = image.height;
+  final rgb = Uint8List(width * height * 3);
+  var idx = 0;
+
+  for (var y = 0; y < height; y++) {
+    for (var x = 0; x < width; x++) {
+      final pixel = image.getPixel(x, y);
+      rgb[idx++] = pixel.r.toInt();
+      rgb[idx++] = pixel.g.toInt();
+      rgb[idx++] = pixel.b.toInt();
+    }
+  }
+
+  return (bytes: rgb, width: width, height: height);
+}
+
+/// Camera preview with desktop-specific mirroring where needed.
+Widget buildCameraPreview(CameraController controller) {
+  final preview = CameraPreview(controller);
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+    return Transform(
+      alignment: Alignment.center,
+      transform: Matrix4.diagonal3Values(-1, 1, 1),
+      child: preview,
+    );
+  }
+  return preview;
 }

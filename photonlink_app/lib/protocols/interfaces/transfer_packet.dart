@@ -130,10 +130,13 @@ final class HandshakePacket extends TransferPacket {
     required super.sessionId,
     required this.receivedChunkIds,
     required this.timestamp,
+    this.keyExchangeResponse,
   });
 
   final List<int> receivedChunkIds;
   final DateTime timestamp;
+  /// Receiver X25519 public key (base64) for ECDH completion on sender.
+  final String? keyExchangeResponse;
 }
 
 /// Control signals for round handoff and lifecycle.

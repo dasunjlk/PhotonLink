@@ -80,6 +80,8 @@ class QrFrameCodec implements TransferEncoder<String>, TransferDecoder<String> {
           'receivedChunkIds':
               PacketIdRanges.encode(handshake.receivedChunkIds),
           'timestamp': handshake.timestamp.toIso8601String(),
+          if (handshake.keyExchangeResponse != null)
+            'keyExchangeResponse': handshake.keyExchangeResponse,
         });
         final b64 = base64Encode(utf8.encode(jsonPayload));
         return '$magic|H|${handshake.sessionId}|0|${handshake.receivedChunkIds.length}|$b64';
@@ -216,6 +218,7 @@ class QrFrameCodec implements TransferEncoder<String>, TransferDecoder<String> {
               jsonMap['timestamp'] as String? ??
                   DateTime.now().toIso8601String(),
             ),
+            keyExchangeResponse: jsonMap['keyExchangeResponse'] as String?,
           );
         case 'P':
           final jsonStrP = utf8.decode(payloadBytes);

@@ -17,7 +17,9 @@ import '../../settings/domain/app_settings.dart';
 
 import '../../core/errors/app_exceptions.dart';
 import '../../services/camera/camera_error_messages.dart';
+import '../../services/camera/camera_frame_poller.dart';
 import '../../services/camera/camera_platform.dart';
+import '../../services/camera/camera_session.dart';
 import '../../services/permissions/permission_service.dart';
 import '../../shared/widgets/camera_error_panel.dart';
 
@@ -87,6 +89,8 @@ class _ColorMatrixReceiverScreenState
 
   ColorMatrixReceiverController? _receiverNotifier;
 
+  CameraFramePoller? _framePoller;
+
   @override
   void initState() {
     super.initState();
@@ -129,9 +133,9 @@ class _ColorMatrixReceiverScreenState
     } catch (e) {
       if (mounted) {
         setState(() {
-          _permissionGranted = false;
+          _permissionGranted = true;
           _checkingPermission = false;
-          _permissionError = describeCameraFailure(e);
+          _cameraError = describeCameraFailure(e);
         });
       }
     }
@@ -141,26 +145,14 @@ class _ColorMatrixReceiverScreenState
     final settings = ref.read(settingsProvider);
 
     try {
-      final cameras = await availableCameras();
-      if (cameras.isEmpty) {
-        throw CameraException(
-          'noCamera',
-          'No camera found on this device.',
-        );
-      }
-
-      final camera = cameras.firstWhere(
-        (c) => c.lensDirection == CameraLensDirection.back,
-        orElse: () => cameras.first,
-      );
-
       final preset = settings.cameraResolution == 'high'
           ? ResolutionPreset.high
           : ResolutionPreset.medium;
 
-      final controller = createColorMatrixCameraController(camera, preset);
-
-      await controller.initialize();
+      final controller = await openPreferredCamera(
+        preset: preset,
+        permissionService: _permissionService,
+      );
       if (!mounted) {
         await controller.dispose();
         return;
@@ -173,16 +165,7 @@ class _ColorMatrixReceiverScreenState
             cameraHeight: controller.value.previewSize?.width.toInt() ?? 0,
           );
 
-      var streamActive = false;
-      String? streamWarning;
-      try {
-        await controller.startImageStream(_onImageStream);
-        streamActive = true;
-      } catch (e) {
-        streamWarning = kIsWeb
-            ? 'Live frame analysis is limited on web. Use the Android or desktop app for full Color Matrix receive.'
-            : describeCameraFailure(e);
-      }
+      await _startFrameAnalysis(controller);
 
       if (!mounted) {
         await controller.dispose();
@@ -191,8 +174,6 @@ class _ColorMatrixReceiverScreenState
 
       setState(() {
         _cameraController = controller;
-        _streamActive = streamActive;
-        _streamWarning = streamWarning;
         _cameraError = null;
       });
     } catch (e) {
@@ -201,6 +182,132 @@ class _ColorMatrixReceiverScreenState
           _cameraError = describeCameraFailure(e);
         });
       }
+    }
+  }
+
+  Future<void> _startFrameAnalysis(CameraController controller) async {
+    final throttleMs = ref
+        .read(colorMatrixReceiverControllerProvider.notifier)
+        .processingThrottleMs;
+
+    if (supportsCameraImageStream()) {
+      try {
+        await controller.startImageStream(_onImageStream);
+        if (mounted) {
+          setState(() {
+            _streamActive = true;
+            _streamWarning = null;
+          });
+        }
+        return;
+      } catch (e) {
+        if (!usesCameraCapturePolling()) {
+          rethrow;
+        }
+      }
+    }
+
+    _framePoller = CameraFramePoller(
+      controller: controller,
+      intervalMs: throttleMs,
+      onFrame: ({required bytes, required width, required height}) {
+        unawaited(_processRgbFrame(bytes, width, height));
+      },
+    );
+    _framePoller!.start();
+
+    if (mounted) {
+      setState(() {
+        _streamActive = false;
+        _streamWarning = usesCameraCapturePolling()
+            ? 'Using capture mode on this platform (slower than live stream).'
+            : describeCameraFailure(
+                Exception('Live frame analysis is unavailable.'),
+              );
+      });
+    }
+  }
+
+  Future<void> _processRgbFrame(
+    Uint8List rgbBytes,
+    int width,
+    int height,
+  ) async {
+    if (_isProcessing) return;
+
+    final notifier = ref.read(colorMatrixReceiverControllerProvider.notifier);
+    final receiverState = ref.read(colorMatrixReceiverControllerProvider);
+
+    if (receiverState.phase == TransferPhase.completed ||
+        receiverState.phase == TransferPhase.failed ||
+        receiverState.phase == TransferPhase.reconstructing) {
+      return;
+    }
+
+    final throttleMs = notifier.processingThrottleMs;
+    final now = DateTime.now();
+    if (now.difference(_lastProcess).inMilliseconds < throttleMs) return;
+
+    _lastProcess = now;
+    _isProcessing = true;
+
+    try {
+      final brightness = _brightnessSampler.sampleFromRgb(rgbBytes);
+      notifier.recordBrightnessSample(
+        brightness.avg,
+        variance: brightness.variance,
+      );
+
+      final gridSize = receiverState.gridSize;
+      final detection = _detector.detectFromRgb(
+        rgbBytes: rgbBytes,
+        width: width,
+        height: height,
+        gridSize: gridSize,
+      );
+
+      if (!detection.detected || detection.cells.isEmpty) {
+        notifier.onColorMatrixFrame(
+          ColorMatrixFrame(
+            protocolVersion: ColorMatrixFrame.currentProtocolVersion,
+            sessionId: '',
+            frameId: 0,
+            packetId: 0,
+            packetType: ColorMatrixPacketType.data,
+            totalPackets: 0,
+            payload: Uint8List(0),
+            checksum: 0,
+            gridSize: gridSize,
+            cells: const [],
+          ),
+          detectionAccuracy: 0,
+          detected: false,
+        );
+        return;
+      }
+
+      final frame = ColorMatrixFrame(
+        protocolVersion: ColorMatrixFrame.currentProtocolVersion,
+        sessionId: '',
+        frameId: 0,
+        packetId: 0,
+        packetType: ColorMatrixPacketType.data,
+        totalPackets: 0,
+        payload: Uint8List(0),
+        checksum: 0,
+        gridSize: detection.gridSize,
+        cells: detection.cells,
+      );
+
+      notifier.onColorMatrixFrame(
+        frame,
+        detectionAccuracy: detection.accuracy,
+        detected: true,
+      );
+    } catch (_) {
+      // Skip bad frames
+    } finally {
+      _isProcessing = false;
     }
   }
 
@@ -295,6 +402,7 @@ class _ColorMatrixReceiverScreenState
   @override
   void dispose() {
     _receiverNotifier?.reset();
+    _framePoller?.stop();
 
     if (_streamActive) {
       _cameraController?.stopImageStream();
@@ -320,11 +428,13 @@ class _ColorMatrixReceiverScreenState
       (prev, next) {
         if (prev?.phase != TransferPhase.completed &&
             next.phase == TransferPhase.completed) {
+          _framePoller?.stop();
           if (_streamActive) _cameraController?.stopImageStream();
 
           context.push(AppRoutes.colorMatrixComplete, extra: next);
         } else if (prev?.phase != TransferPhase.failed &&
             next.phase == TransferPhase.failed) {
+          _framePoller?.stop();
           if (_streamActive) _cameraController?.stopImageStream();
 
           context.push(AppRoutes.colorMatrixComplete, extra: next);
@@ -513,7 +623,7 @@ class _CameraPane extends StatelessWidget {
               child: SizedBox(
                 width: controller!.value.previewSize?.height ?? 1,
                 height: controller!.value.previewSize?.width ?? 1,
-                child: CameraPreview(controller!),
+                child: buildCameraPreview(controller!),
               ),
             ),
             ScanFrameOverlay(

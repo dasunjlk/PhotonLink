@@ -10,11 +10,15 @@ import '../../features/home/home_screen.dart';
 import '../../features/color_matrix_transfer/color_matrix_completion_screen.dart';
 import '../../features/color_matrix_transfer/color_matrix_receiver_screen.dart';
 import '../../features/color_matrix_transfer/color_matrix_sender_screen.dart';
+import '../../features/optical_stream_transfer/optical_stream_completion_screen.dart';
+import '../../features/optical_stream_transfer/optical_stream_receiver_screen.dart';
+import '../../features/optical_stream_transfer/optical_stream_sender_screen.dart';
 import '../../features/qr_transfer/qr_completion_screen.dart';
 import '../../features/qr_transfer/qr_receiver_screen.dart';
 import '../../features/qr_transfer/qr_sender_screen.dart';
 import '../../features/transfer_setup/transfer_setup_screen.dart';
 import '../../transfer/application/color_matrix_transfer_state.dart';
+import '../../transfer/application/optical_stream_transfer_state.dart';
 import '../../transfer/application/transfer_state.dart';
 import '../../history/presentation/history_screen.dart';
 import '../../protocols/transfer_method.dart';
@@ -36,6 +40,9 @@ abstract final class AppRoutes {
   static const colorMatrixSend = '/color-matrix/send';
   static const colorMatrixReceive = '/color-matrix/receive';
   static const colorMatrixComplete = '/color-matrix/complete';
+  static const opticalStreamSend = '/optical-stream/send';
+  static const opticalStreamReceive = '/optical-stream/receive';
+  static const opticalStreamComplete = '/optical-stream/complete';
 
   static String transferSetupPath(TransferMethod method) =>
       '/transfer/${method.routeName}';
@@ -139,6 +146,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final receiverState = state.extra as ColorMatrixReceiverState?;
           return ColorMatrixCompletionScreen(
             state: receiverState ?? const ColorMatrixReceiverState(),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.opticalStreamSend,
+        name: 'opticalStreamSend',
+        builder: (context, state) => const OpticalStreamSenderScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.opticalStreamReceive,
+        name: 'opticalStreamReceive',
+        builder: (context, state) => const OpticalStreamReceiverScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.opticalStreamComplete,
+        name: 'opticalStreamComplete',
+        builder: (context, state) {
+          final receiverState = state.extra as OpticalStreamReceiverState?;
+          return OpticalStreamCompletionScreen(
+            state: receiverState ?? const OpticalStreamReceiverState(),
           );
         },
       ),

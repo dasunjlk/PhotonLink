@@ -2,7 +2,8 @@ import 'dart:typed_data';
 
 /// Abstract FFI surface for the Rust core engine.
 ///
-/// Implemented by [FrbCoreApi] after codegen, or [NotConnectedCoreApi] as fallback.
+/// Implemented by [FrbCoreApi] when the native core is connected, or
+/// [NotConnectedCoreApi] as a fallback.
 abstract interface class PhotonLinkCoreApi {
   Future<String> coreVersion();
   String sha256Hex(Uint8List data);
@@ -21,6 +22,9 @@ abstract interface class PhotonLinkCoreApi {
 
   Uint8List encodePlcmFrame(PlcmFrameDto frame);
   PlcmFrameDto decodePlcmFrame(Uint8List bytes);
+
+  Uint8List encodePlosFrame(PlosFrameDto frame);
+  PlosFrameDto decodePlosFrame(Uint8List bytes);
 
   List<DataChunkDto> chunkSplit({
     required Uint8List data,
@@ -107,6 +111,12 @@ class NotConnectedCoreApi implements PhotonLinkCoreApi {
 
   @override
   PlcmFrameDto decodePlcmFrame(Uint8List bytes) => _throw();
+
+  @override
+  Uint8List encodePlosFrame(PlosFrameDto frame) => _throw();
+
+  @override
+  PlosFrameDto decodePlosFrame(Uint8List bytes) => _throw();
 
   @override
   List<DataChunkDto> chunkSplit({
@@ -198,6 +208,38 @@ class PlcmFrameDto {
   final int totalPackets;
   final int gridSize;
   final int bitsPerChannel;
+  final Uint8List payload;
+  final int checksum;
+}
+
+class PlosFrameDto {
+  const PlosFrameDto({
+    required this.protocolVersion,
+    required this.sessionId,
+    required this.streamId,
+    required this.frameId,
+    required this.packetId,
+    required this.packetType,
+    required this.totalPackets,
+    required this.syncMarker,
+    required this.timestamp,
+    required this.gridSize,
+    required this.bitsPerCell,
+    required this.payload,
+    this.checksum = 0,
+  });
+
+  final int protocolVersion;
+  final String sessionId;
+  final int streamId;
+  final int frameId;
+  final int packetId;
+  final int packetType;
+  final int totalPackets;
+  final int syncMarker;
+  final int timestamp;
+  final int gridSize;
+  final int bitsPerCell;
   final Uint8List payload;
   final int checksum;
 }

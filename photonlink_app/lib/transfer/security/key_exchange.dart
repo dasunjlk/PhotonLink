@@ -1,12 +1,15 @@
 import 'dart:typed_data';
 
-/// Future-ready key exchange abstraction (Phase 4: simplified setup packet).
+/// Key exchange abstraction (X25519 ECDH over optical channel).
 abstract interface class KeyExchange {
-  /// Generates session key material for the sender.
-  Future<KeyExchangeResult> generateForSender();
+  /// Sender generates ephemeral key material for [sessionId].
+  Future<KeyExchangeResult> generateForSender({String sessionId = ''});
 
-  /// Receiver parses key material from setup payload.
-  Future<Uint8List> acceptFromReceiver(String keyExchangePayloadBase64);
+  /// Receiver derives the session key from the setup/metadata payload.
+  Future<Uint8List> acceptFromReceiver(
+    String keyExchangePayloadBase64, {
+    String sessionId = '',
+  });
 }
 
 /// Result of sender-side key generation.

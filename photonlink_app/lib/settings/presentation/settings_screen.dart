@@ -369,6 +369,105 @@ class _TransferSection extends ConsumerWidget {
             ),
           ],
         ),
+        _Group(
+          title: 'Optical Stream Transport',
+          subtitle: 'Continuous high-speed optical streaming',
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Stream Density (grid)'),
+              subtitle: Text(
+                '${settings.opticalStreamDensity}×${settings.opticalStreamDensity}',
+              ),
+              trailing: DropdownButton<int>(
+                value: settings.opticalStreamDensity,
+                underline: const SizedBox.shrink(),
+                items: const [16, 24, 32, 48]
+                    .map(
+                      (s) => DropdownMenuItem(value: s, child: Text('$s×$s')),
+                    )
+                    .toList(),
+                onChanged: (s) {
+                  if (s != null) controller.updateOpticalStreamDensity(s);
+                },
+              ),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              child: Row(
+                children: [
+                  const Expanded(child: Text('Stream speed')),
+                  Expanded(
+                    flex: 2,
+                    child: Slider(
+                      value: settings.opticalStreamSpeed.clamp(2, 15),
+                      min: 2,
+                      max: 15,
+                      divisions: 13,
+                      label:
+                          '${settings.opticalStreamSpeed.toStringAsFixed(0)} fps',
+                      onChanged: controller.updateOpticalStreamSpeed,
+                    ),
+                  ),
+                  Text(
+                    '${settings.opticalStreamSpeed.toStringAsFixed(0)} fps',
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              child: Row(
+                children: [
+                  const Expanded(child: Text('Sync aggressiveness')),
+                  Expanded(
+                    flex: 2,
+                    child: Slider(
+                      value: settings.opticalSyncAggressiveness,
+                      min: 0.2,
+                      max: 1.0,
+                      divisions: 8,
+                      label: settings.opticalSyncAggressiveness
+                          .toStringAsFixed(1),
+                      onChanged: controller.updateOpticalSyncAggressiveness,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              child: Row(
+                children: [
+                  const Expanded(child: Text('Recovery sensitivity')),
+                  Expanded(
+                    flex: 2,
+                    child: Slider(
+                      value: settings.opticalRecoverySensitivity,
+                      min: 0.2,
+                      max: 1.0,
+                      divisions: 8,
+                      label: settings.opticalRecoverySensitivity
+                          .toStringAsFixed(1),
+                      onChanged: controller.updateOpticalRecoverySensitivity,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Stream diagnostics overlay'),
+              subtitle: const Text('Show debug overlay on sender frames'),
+              value: settings.opticalStreamDiagnostics,
+              onChanged: controller.toggleOpticalStreamDiagnostics,
+            ),
+          ],
+        ),
       ],
     );
   }

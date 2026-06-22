@@ -4,7 +4,9 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../core/protocol_versions.dart';
 import '../../history/application/history_controller.dart';
+import '../security/safe_filename.dart';
 import '../../history/domain/transfer_record.dart';
 import '../../protocols/interfaces/compression_type.dart';
 import '../../protocols/interfaces/encryption_mode.dart';
@@ -44,6 +46,7 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
   late FrameDiagnosticsCollector _diagnostics;
   ColorMatrixTransport? _sessionTransport;
   bool _finalizing = false;
+  Future<void> _dataHandleChain = Future.value();
   DateTime? _receiveStartedAt;
   String? _historyId;
 
@@ -162,7 +165,9 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
           _handleMetadata(metadata, detectionAccuracy: detectionAccuracy),
         );
       case DataPacket data:
-        unawaited(_handleData(data, detectionAccuracy: detectionAccuracy));
+        _dataHandleChain = _dataHandleChain.then(
+          (_) => _handleData(data, detectionAccuracy: detectionAccuracy),
+        );
       case ParityPacket parity:
         _handleParity(parity, detectionAccuracy: detectionAccuracy);
       default:
@@ -195,7 +200,10 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
         return;
       }
       try {
-        final key = await _keyExchange.acceptFromReceiver(keyPayload);
+        final key = await _keyExchange.acceptFromReceiver(
+          keyPayload,
+          sessionId: metadata.sessionId,
+        );
         _keyProvider.setSessionKey(key);
       } catch (_) {
         _diagnostics.recordFrameCorrupted();
@@ -225,7 +233,7 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
               encryptionUsed:
                   metadata.encryption == EncryptionMode.enabled,
               profileUsed: state.transportProfile.id,
-              protocolVersion: 4,
+              protocolVersion: ProtocolVersions.metadataProtocolVersion,
             ),
           );
     }
@@ -307,8 +315,9 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
     final result = _fecRecovery.attemptRecovery(_recon);
     if (result.recoveredCount > 0) {
       _diagnostics.updateFecStatistics(_fecRecovery.statistics);
-      ref.read(colorMatrixReceiverAdaptiveProvider)
-          .updateFecStatistics(_fecRecovery.statistics);
+      final adaptive = ref.read(colorMatrixReceiverAdaptiveProvider);
+      adaptive.updateFecStatistics(_fecRecovery.statistics);
+      _fecRecovery.configure(adaptive.applyFecAdaptationIfNeeded());
 
       final missing = _recon.totalChunks - _recon.receivedCount;
       _diagnostics.updateMissingCount(missing);
@@ -323,6 +332,7 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
   Future<void> _finalize() async {
     if (_finalizing) return;
     _finalizing = true;
+    await _dataHandleChain;
     state = state.copyWith(phase: TransferPhase.reconstructing);
 
     await _attemptFecRecovery();
@@ -361,7 +371,7 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
       }
 
       final dir = await getApplicationDocumentsDirectory();
-      final safeName = meta.fileName.replaceAll(RegExp(r'[^\w.\-]'), '_');
+      final safeName = safeTransferFilename(meta.fileName);
       final outputPath = '${dir.path}/$safeName';
       await File(outputPath).writeAsBytes(plaintext, flush: true);
 
@@ -396,13 +406,14 @@ class ColorMatrixReceiverController extends Notifier<ColorMatrixReceiverState> {
                 adaptiveEventCount:
                     adaptive.diagnostics.appliedDecisionCount,
                 environmentSummary: adaptive.state.environment.summary,
-                protocolVersion: 5,
+                protocolVersion: ProtocolVersions.metadataProtocolVersion,
                 fecProfile: _fecRecovery.config.profile.id,
                 packetsRecovered: _fecRecovery.statistics.packetsRecovered,
                 recoveryRate: _fecRecovery.statistics.recoverySuccessRate,
                 parityOverhead: _fecRecovery.statistics.fecOverhead,
               ),
             );
+        ref.invalidate(historyProvider);
       }
 
       state = state.copyWith(

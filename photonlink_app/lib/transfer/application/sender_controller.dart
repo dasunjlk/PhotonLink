@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants.dart';
+import '../../core/protocol_versions.dart';
+import '../reliability/models/retry_policy.dart';
 import '../../history/application/history_controller.dart';
 import '../../history/domain/transfer_record.dart';
 import '../../protocols/interfaces/compression_type.dart';
@@ -31,6 +34,7 @@ class SenderController extends Notifier<SenderTransferState> {
   QrStreamController? _stream;
   SenderSessionBundle? _bundle;
   late ReliableTransferContext _ctx;
+  Timer? _ackTimeoutTimer;
 
   @override
   SenderTransferState build() {
@@ -38,7 +42,10 @@ class SenderController extends Notifier<SenderTransferState> {
       role: TransferRole.sender,
       payloadPipeline: ref.read(payloadPipelineProvider),
     );
-    ref.onDispose(() => _stream?.dispose());
+    ref.onDispose(() {
+      _ackTimeoutTimer?.cancel();
+      _stream?.dispose();
+    });
     return const SenderTransferState();
   }
 
@@ -55,6 +62,9 @@ class SenderController extends Notifier<SenderTransferState> {
     required String? extension,
     String? filePath,
     Uint8List? fileBytes,
+    String? sessionIdOverride,
+    String? sessionKeyBase64,
+    String? keyExchangePayload,
   }) async {
     _ctx.reset();
     _transition(TransferPhase.preparing);
@@ -81,10 +91,21 @@ class SenderController extends Notifier<SenderTransferState> {
           ? EncryptionMode.enabled
           : EncryptionMode.disabled;
 
-      KeyExchangeResult? keyResult;
+      final sessionId =
+          sessionIdOverride ?? _sessionFactory.generateSessionId();
+
+      String? resolvedKeyPayload = keyExchangePayload;
       if (encryption == EncryptionMode.enabled) {
-        keyResult = await _ctx.keyExchange.generateForSender();
-        _ctx.keyProvider.setSessionKey(keyResult.sessionKey);
+        if (sessionKeyBase64 != null) {
+          final restoredKey = base64Decode(sessionKeyBase64);
+          _ctx.keyProvider.setSessionKey(Uint8List.fromList(restoredKey));
+        } else {
+          final keyResult = await _ctx.keyExchange.generateForSender(
+            sessionId: sessionId,
+          );
+          _ctx.keyProvider.setSessionKey(keyResult.sessionKey);
+          resolvedKeyPayload = keyResult.payloadBase64;
+        }
       }
 
       final prepared = await _pipeline.prepare(
@@ -106,14 +127,15 @@ class SenderController extends Notifier<SenderTransferState> {
         originalSha256: prepared.originalSha256,
         compression: prepared.compression,
         encryption: prepared.encryption,
+        sessionIdOverride: sessionId,
       );
 
       SessionSetupPacket? setup;
-      if (encryption == EncryptionMode.enabled && keyResult != null) {
+      if (encryption == EncryptionMode.enabled && resolvedKeyPayload != null) {
         setup = SessionSetupPacket(
           sessionId: _bundle!.metadata.sessionId,
-          protocolVersion: AppConstants.protocolVersion,
-          keyExchangePayload: keyResult.payloadBase64,
+          protocolVersion: ProtocolVersions.metadataProtocolVersion,
+          keyExchangePayload: resolvedKeyPayload,
           compression: compression,
           encryption: encryption,
           timestamp: DateTime.now(),
@@ -184,7 +206,7 @@ class SenderController extends Notifier<SenderTransferState> {
                 ? state.compressionRatio
                 : null,
             transferSpeedBytesPerSec: snap.averageBytesPerSec,
-            protocolVersion: _bundle!.metadata.protocolVersion,
+            protocolVersion: ProtocolVersions.metadataProtocolVersion,
           ),
         );
     ref.invalidate(historyProvider);
@@ -248,6 +270,7 @@ class SenderController extends Notifier<SenderTransferState> {
 
   void _handleNak(NakPacket nak) {
     if (_bundle == null || nak.sessionId != _bundle!.session.id) return;
+    _ackTimeoutTimer?.cancel();
     if (state.phase != TransferPhase.awaitingAcknowledgements &&
         state.phase != TransferPhase.recoveringMissingPackets) {
       return;
@@ -267,10 +290,10 @@ class SenderController extends Notifier<SenderTransferState> {
 
   void _handleAck(AckPacket ack) {
     if (_bundle == null || ack.sessionId != _bundle!.session.id) return;
+    _ackTimeoutTimer?.cancel();
     _ctx.ackManager.processAck(ack);
     _ctx.diagnostics.recordAck();
-    if (_ctx.ackManager.allAcknowledged ||
-        ack.packetIds.length >= _bundle!.metadata.totalChunks) {
+    if (_ctx.ackManager.allAcknowledged) {
       _completeSuccess();
     }
   }
@@ -309,7 +332,7 @@ class SenderController extends Notifier<SenderTransferState> {
 
     if (!_ctx.paritySent &&
         _ctx.fecRecovery.config.enabled &&
-        missing.length >= _bundle!.metadata.totalChunks) {
+        missing.isNotEmpty) {
       final parity = _ctx.fecRecovery.generateParity(
         dataPackets: _bundle!.dataPackets,
         sessionId: _bundle!.session.id,
@@ -361,6 +384,15 @@ class SenderController extends Notifier<SenderTransferState> {
     _transition(TransferPhase.awaitingAcknowledgements);
     state = state.copyWith(currentFrameData: _stream!.currentFrameData);
     _syncState();
+    _ackTimeoutTimer?.cancel();
+    _ackTimeoutTimer = Timer(
+      Duration(milliseconds: RetryPolicy.defaultPolicy.retryTimeoutMs),
+      () {
+        if (state.phase != TransferPhase.awaitingAcknowledgements) return;
+        _transition(TransferPhase.recoveringMissingPackets);
+        _beginDataRound();
+      },
+    );
   }
 
   void finishRoundAndAwaitAck() {
@@ -373,6 +405,7 @@ class SenderController extends Notifier<SenderTransferState> {
   Future<void> _completeSuccess() async {
     if (_ctx.isFinalizing) return;
     _ctx.isFinalizing = true;
+    _ackTimeoutTimer?.cancel();
     _stream?.stop();
     _transition(TransferPhase.completed);
     _ctx.diagnostics.markCompleted();
@@ -445,13 +478,14 @@ class SenderController extends Notifier<SenderTransferState> {
     await prepareTransfer(
       filePath: persisted.senderFilePath!,
       fileName: persisted.fileName,
-      extension: persisted.fileName.split('.').last,
+      extension: persisted.fileName.contains('.')
+          ? persisted.fileName.split('.').last
+          : null,
+      sessionIdOverride: sessionId,
+      sessionKeyBase64: persisted.sessionKeyBase64,
+      keyExchangePayload: persisted.keyExchangePayload,
     );
-    _ctx.tracker.reset(
-      sessionId: sessionId,
-      totalPackets: persisted.totalChunks,
-    );
-    for (final id in persisted.receivedChunkIds) {
+    for (final id in persisted.acknowledgedChunkIds) {
       _ctx.ackManager.recordAcknowledged(id);
     }
     _transition(TransferPhase.resuming);
@@ -476,6 +510,10 @@ class SenderController extends Notifier<SenderTransferState> {
         progress: _ctx.ackManager.acknowledgedIds.length / meta.totalChunks,
         diagnostics: _ctx.diagnostics.snapshot,
         senderFilePath: state.filePath,
+        sessionKeyBase64: _ctx.keyProvider.hasKey
+            ? base64Encode(_ctx.keyProvider.sessionKey)
+            : null,
+        keyExchangePayload: _bundle?.setupPacket?.keyExchangePayload,
         updatedAt: DateTime.now(),
       ),
     );

@@ -15,6 +15,18 @@ final colorMatrixReceiverAdaptiveProvider =
   return AdaptiveSessionController(ref: ref);
 });
 
+/// Per-session adaptive engine for Optical Stream sender.
+final opticalStreamSenderAdaptiveProvider =
+    Provider<AdaptiveSessionController>((ref) {
+  return AdaptiveSessionController(ref: ref, useOpticalMapper: true);
+});
+
+/// Per-session adaptive engine for Optical Stream receiver.
+final opticalStreamReceiverAdaptiveProvider =
+    Provider<AdaptiveSessionController>((ref) {
+  return AdaptiveSessionController(ref: ref, useOpticalMapper: true);
+});
+
 /// Latest adaptive state snapshot (receiver-side primary).
 final adaptiveStateProvider = StateProvider<AdaptiveState>(
   (ref) => const AdaptiveState(),

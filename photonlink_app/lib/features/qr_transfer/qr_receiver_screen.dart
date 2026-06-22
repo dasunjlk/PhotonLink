@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../core/errors/app_exceptions.dart';
 import '../../core/router/app_router.dart';
@@ -15,7 +14,7 @@ import '../../shared/components/components.dart';
 import '../../shared/widgets/camera_error_panel.dart';
 import '../../shared/widgets/gradient_scaffold.dart';
 import '../../shared/widgets/inner_screen_header.dart';
-import '../../shared/widgets/scan_frame_overlay.dart';
+import '../../shared/widgets/photon_qr_scanner_view.dart';
 import '../../shared/widgets/transfer_info_panel.dart';
 import '../../shared/widgets/transfer_presentation.dart';
 import '../../shared/widgets/transfer_stage_layout.dart';
@@ -34,10 +33,6 @@ class QrReceiverScreen extends ConsumerStatefulWidget {
 }
 
 class _QrReceiverScreenState extends ConsumerState<QrReceiverScreen> {
-  final _scanner = MobileScannerController(
-    detectionSpeed: DetectionSpeed.noDuplicates,
-    facing: CameraFacing.back,
-  );
   final _permission = PermissionService();
   bool _cameraOk = false;
   bool _checking = true;
@@ -48,23 +43,12 @@ class _QrReceiverScreenState extends ConsumerState<QrReceiverScreen> {
   @override
   void initState() {
     super.initState();
-    _scanner.addListener(_onScannerStateChanged);
     _init();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _receiverNotifier = ref.read(receiverControllerProvider.notifier);
       _receiverNotifier!.startReceiving();
       _receiverNotifier!.checkResumableSession();
-    });
-  }
-
-  void _onScannerStateChanged() {
-    final error = _scanner.value.error;
-    if (error == null || !mounted) return;
-
-    setState(() {
-      _cameraOk = false;
-      _cameraError = describeMobileScannerFailure(error);
     });
   }
 
@@ -80,14 +64,16 @@ class _QrReceiverScreenState extends ConsumerState<QrReceiverScreen> {
           _cameraOk = false;
           _checking = false;
           _cameraError =
-              'QR camera scanning is not supported on Windows or Linux. Use the web or mobile app.';
+              'QR camera scanning is not supported on this platform.';
         });
       }
       return;
     }
 
     try {
-      await _permission.ensureCamera();
+      if (isMobileScannerQrSupported()) {
+        await _permission.ensureCamera();
+      }
       if (mounted) {
         setState(() {
           _cameraOk = true;
@@ -115,9 +101,7 @@ class _QrReceiverScreenState extends ConsumerState<QrReceiverScreen> {
 
   @override
   void dispose() {
-    _scanner.removeListener(_onScannerStateChanged);
     _receiverNotifier?.reset();
-    _scanner.dispose();
     super.dispose();
   }
 
@@ -184,13 +168,12 @@ class _QrReceiverScreenState extends ConsumerState<QrReceiverScreen> {
                   showDisplay: _showDisplay(state.phase),
                   showScan: _showScan(state.phase),
                   frameData: state.currentFrameData,
-                  scanner: _scanner,
                   onDetect: notifier.onFrameScanned,
-                  onScannerError: (error) {
+                  onScannerError: (message) {
                     if (!mounted) return;
                     setState(() {
                       _cameraOk = false;
-                      _cameraError = describeMobileScannerFailure(error);
+                      _cameraError = message;
                     });
                   },
                 ),
@@ -319,7 +302,6 @@ class _DisplayPane extends StatelessWidget {
     required this.showDisplay,
     required this.showScan,
     required this.frameData,
-    required this.scanner,
     required this.onDetect,
     required this.onScannerError,
   });
@@ -327,9 +309,8 @@ class _DisplayPane extends StatelessWidget {
   final bool showDisplay;
   final bool showScan;
   final String? frameData;
-  final MobileScannerController scanner;
   final ValueChanged<String> onDetect;
-  final ValueChanged<MobileScannerException> onScannerError;
+  final ValueChanged<String> onScannerError;
 
   @override
   Widget build(BuildContext context) {
@@ -338,34 +319,10 @@ class _DisplayPane extends StatelessWidget {
     }
 
     if (showScan) {
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              MobileScanner(
-                controller: scanner,
-                errorBuilder: (context, error) {
-                  onScannerError(error);
-                  return CameraErrorPanel(
-                    message: describeMobileScannerFailure(error),
-                    onRetry: () => scanner.start(),
-                  );
-                },
-                onDetect: (cap) {
-                  for (final b in cap.barcodes) {
-                    final v = b.rawValue;
-                    if (v != null) onDetect(v);
-                  }
-                },
-              ),
-              ScanFrameOverlay(
-                frameSize: constraints.biggest.shortestSide * 0.72,
-                label: 'Scan sender QR frames',
-              ),
-            ],
-          );
-        },
+      return PhotonQrScannerView(
+        scanLabel: 'Scan sender QR frames',
+        onDetect: onDetect,
+        onError: onScannerError,
       );
     }
 

@@ -3,6 +3,8 @@
 //! Performance-critical transfer logic: hashing, checksums, packet codecs,
 //! chunking, reconstruction, compression, encryption, diagnostics, and FEC.
 
+mod frb_generated;
+
 pub mod api;
 pub mod chunking;
 pub mod compression;

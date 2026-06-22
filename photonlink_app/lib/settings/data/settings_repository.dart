@@ -48,6 +48,16 @@ class SettingsRepository {
         _prefs.getInt(AppConstants.prefRedundancyPercent);
     final adaptiveFecEnabled =
         _prefs.getBool(AppConstants.prefAdaptiveFecEnabled);
+    final opticalStreamSpeed =
+        _prefs.getDouble(AppConstants.prefOpticalStreamSpeed);
+    final opticalStreamDensity =
+        _prefs.getInt(AppConstants.prefOpticalStreamDensity);
+    final opticalSyncAggressiveness =
+        _prefs.getDouble(AppConstants.prefOpticalSyncAggressiveness);
+    final opticalRecoverySensitivity =
+        _prefs.getDouble(AppConstants.prefOpticalRecoverySensitivity);
+    final opticalStreamDiagnostics =
+        _prefs.getBool(AppConstants.prefOpticalStreamDiagnostics);
 
     return AppSettings(
       themeMode: themeIndex != null
@@ -76,6 +86,11 @@ class SettingsRepository {
       fecProfile: FecProfile.fromId(fecProfileId),
       redundancyPercent: redundancyPercent ?? 10,
       adaptiveFecEnabled: adaptiveFecEnabled ?? true,
+      opticalStreamSpeed: opticalStreamSpeed ?? 8.0,
+      opticalStreamDensity: _validGridSize(opticalStreamDensity),
+      opticalSyncAggressiveness: opticalSyncAggressiveness ?? 0.6,
+      opticalRecoverySensitivity: opticalRecoverySensitivity ?? 0.5,
+      opticalStreamDiagnostics: opticalStreamDiagnostics ?? true,
     );
   }
 
@@ -165,6 +180,26 @@ class SettingsRepository {
     await _prefs.setBool(
       AppConstants.prefAdaptiveFecEnabled,
       settings.adaptiveFecEnabled,
+    );
+    await _prefs.setDouble(
+      AppConstants.prefOpticalStreamSpeed,
+      settings.opticalStreamSpeed,
+    );
+    await _prefs.setInt(
+      AppConstants.prefOpticalStreamDensity,
+      settings.opticalStreamDensity,
+    );
+    await _prefs.setDouble(
+      AppConstants.prefOpticalSyncAggressiveness,
+      settings.opticalSyncAggressiveness,
+    );
+    await _prefs.setDouble(
+      AppConstants.prefOpticalRecoverySensitivity,
+      settings.opticalRecoverySensitivity,
+    );
+    await _prefs.setBool(
+      AppConstants.prefOpticalStreamDiagnostics,
+      settings.opticalStreamDiagnostics,
     );
   }
 
